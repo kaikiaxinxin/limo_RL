@@ -1,0 +1,236 @@
+<?xml version="1.0"?>
+<robot name="limo_xacro" xmlns:xacro="http://ros.org/wiki/xacro">
+    <xacro:macro name="limo_wheel" params="parent_prefix wheel_prefix reflect *joint_pose">
+        <link name="${wheel_prefix}_wheel_link">
+            <inertial>
+                <origin xyz="0 0 0" />
+                <mass value="0.5" />
+                <inertia ixx="0.01055" ixy="0" ixz="0" iyy="0.00075" iyz="0" izz="0.01055" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://limo_description/meshes/limo_wheel.dae" />
+                </geometry>
+            </visual>
+            <collision>
+              <origin xyz="0 ${wheel_length/2} 0" rpy="1.57 0 0" />
+              <geometry>
+                  <cylinder length="${wheel_length}" radius="${wheel_radius}" />
+              </geometry>
+            </collision>
+        </link>
+
+        <joint name="${wheel_prefix}_wheel" type="continuous">
+            <parent link="${parent_prefix}"/>
+            <child link="${wheel_prefix}_wheel_link"/>
+            <xacro:insert_block name="joint_pose"/>
+            <axis xyz="0 ${reflect*1} 0"/>
+        </joint>
+    </xacro:macro>
+
+
+    <xacro:macro name="limo_laser" params="parent_prefix frame_prefix *joint_pose">
+        <link name='${frame_prefix}_link'>
+            <pose>0 0 0 0 0 0</pose>
+            <inertial>
+                <mass value="0.1"/>
+                <origin xyz="0.0 0 0" rpy="0 0 0"/>
+                <inertia
+                    ixx="1e-6" ixy="0" ixz="0"
+                    iyy="1e-6" iyz="0"
+                    izz="1e-6"
+                />
+            </inertial>
+            <visual name='laser_visual'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <cylinder radius="0.02" length="0.01"/>
+                </geometry>    <!-- 定义一个名为 limo_laser 的 xacro 宏，用于创建激光雷达模型 -->
+    <!-- 参数说明：
+         - parent_prefix: 父链接的前缀
+         - frame_prefix: 激光雷达链接的前缀
+         - *joint_pose: 可选的关节位姿块，用于设置关节的位置和姿态
+    -->
+    <xacro:macro name="limo_laser" params="parent_prefix frame_prefix *joint_pose">
+        <!-- 创建激光雷达的链接，名称由 frame_prefix 加上 _link 后缀组成 -->
+        <link name='${frame_prefix}_link'>
+            <!-- 设置链接的初始位姿，x、y、z 坐标和 roll、pitch、yaw 角度均为 0 -->
+            <pose>0 0 0 0 0 0</pose>
+            <!-- 定义链接的惯性属性 -->
+            <inertial>
+                <!-- 设置链接的质量为 0.1 千克 -->
+                <mass value="0.1"/>
+                <!-- 设置惯性参考点的位置和姿态 -->
+                <origin xyz="0.0 0 0" rpy="0 0 0"/>
+                <!-- 设置惯性张量，描述链接的转动惯量 -->
+                <inertia
+                    ixx="1e-6" ixy="0" ixz="0"
+                    iyy="1e-6" iyz="0"
+                    izz="1e-6"
+                />
+            </inertial>
+            <!-- 定义链接的可视化部分 -->
+            <visual name='laser_visual'>
+                <!-- 设置可视化部分的原点位置和姿态 -->
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <!-- 定义可视化部分的几何形状为圆柱体 -->
+                <geometry>
+                    <cylinder radius="0.02" length="0.01"/>
+                </geometry>
+                <!-- 定义可视化部分的材质属性 -->
+                <material name='laser_material'>
+                    <!-- 设置材质的颜色和透明度 -->
+                    <color rgba="0.5 0.3 0.0 0.5" />
+                    <!-- 设置环境光颜色 -->
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <!-- 设置漫反射颜色 -->
+                    <diffuse>0.1 0.1 0.2 1</diffuse>
+                    <!-- 设置镜面反射颜色 -->
+                    <specular>0 0 0 0</specular>
+                    <!-- 设置自发光颜色 -->
+                    <emissive>0 0 0 1</emissive>
+                </material>
+            </visual>
+            <!-- 定义链接的碰撞检测部分 -->
+            <collision name='laser_collision'>
+                <!-- 设置碰撞检测部分的原点位置和姿态 -->
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <!-- 定义碰撞检测部分的几何形状为圆柱体 -->
+                <geometry>
+                    <cylinder radius="0.032" length="0.016"/>
+                </geometry>
+            </collision>
+        </link>
+        <!-- 创建一个固定类型的关节，用于连接父链接和激光雷达链接 -->
+        <joint type="fixed" name="laser_joint">
+            <!-- 插入可选的关节位姿块 -->
+            <xacro:insert_block name="joint_pose"/>
+            <!-- 设置子链接为激光雷达链接 -->
+            <child link="${frame_prefix}_link"/>
+            <!-- 设置父链接为传入的父链接 -->
+            <parent link="${parent_prefix}"/>
+        </joint>
+        <!-- 为 Gazebo 仿真环境设置链接的材质 -->
+        <gazebo reference="${frame_prefix}_link">
+            <material>Gazebo/Yellow</material>
+        </gazebo>
+    </xacro:macro>
+                <material name='laser_material'>
+                    <color rgba="0.5 0.3 0.0 0.5" />
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <diffuse>0.1 0.1 0.2 1</diffuse>
+                    <specular>0 0 0 0</specular>
+                    <emissive>0 0 0 1</emissive>
+                </material>
+            </visual>
+            <collision name='laser_collision'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <cylinder radius="0.032" length="0.016"/>
+                </geometry>
+            </collision>
+        </link>
+        <joint type="fixed" name="laser_joint">
+            <xacro:insert_block name="joint_pose"/>
+            <child link="${frame_prefix}_link"/>
+            <parent link="${parent_prefix}"/>
+        </joint>
+        <gazebo reference="${frame_prefix}_link">
+            <material>Gazebo/Yellow</material>
+        </gazebo>
+    </xacro:macro>
+
+    <xacro:macro name="limo_depth_camera" params="parent_prefix frame_prefix *joint_pose">
+        <link name='${frame_prefix}_link'>
+            <pose>0 0 0 0 0 0</pose>
+            <inertial>
+                <mass value="0.1"/>
+                <origin xyz="0.0 0 0" rpy="0 0 0"/>
+                <inertia
+                    ixx="1e-6" ixy="0" ixz="0"
+                    iyy="1e-6" iyz="0"
+                    izz="1e-6"
+                />
+            </inertial>
+            <visual name='depth_camera_visual'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <box size="0.02 0.06 0.015"/>
+                </geometry>
+                <material name='depth_camera_material'>
+                    <color rgba="1 1 1 0.5" />
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <diffuse>0.1 0.1 0.2 1</diffuse>
+                    <specular>0 0 0 0</specular>
+                    <emissive>0 0 0 1</emissive>
+                </material>
+            </visual>
+            <collision name='depth_camera_collision'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <box size="0.02 0.06 0.015"/>
+                </geometry>
+            </collision>
+        </link>
+    
+        <joint type="fixed" name="depth_camera_joint">
+            <xacro:insert_block name="joint_pose"/>
+            <child link="${frame_prefix}_link"/>
+            <parent link="${parent_prefix}"/>
+        </joint>
+        <link name="depth_link"></link>
+
+        <joint name="${frame_prefix}_to_camera_joint" type="fixed">
+            <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2} "/>
+            <parent link="${frame_prefix}_link"/>
+            <child link="depth_link"/>
+          </joint>
+
+        <gazebo reference="${frame_prefix}_link">
+            <material>Gazebo/Yellow</material>
+        </gazebo>
+    </xacro:macro>
+
+    <xacro:macro name="limo_imu" params="parent_prefix frame_prefix  *joint_pose">
+        <link name='${frame_prefix}_link'>
+            <pose>0 0 0 0 0 0</pose>
+            <inertial>
+                <mass value="0.01"/>
+                <origin xyz="0.0 0 0" rpy="0 0 0"/>
+                <inertia
+                    ixx="1e-7" ixy="0" ixz="0"
+                    iyy="1e-7" iyz="0"
+                    izz="1e-7"
+                />
+            </inertial>
+            <visual name='imu_visual'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <box size="0.001 0.001 0.001"/>
+                </geometry>
+                <material name='imu_material'>
+                    <color rgba="0.5 0.3 0.0 0.5" />
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <diffuse>0.1 0.1 0.2 1</diffuse>
+                    <specular>0 0 0 0</specular>
+                    <emissive>0 0 0 1</emissive>
+                </material>
+            </visual>
+            <collision name='imu_collision'>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <box size="0.001 0.001 0.001"/>
+                </geometry>
+            </collision>
+        </link>
+        <joint type="fixed" name="imu_joint">
+            <xacro:insert_block name="joint_pose"/>
+            <child link="${frame_prefix}_link"/>
+            <parent link="${parent_prefix}"/>
+        </joint>
+        <gazebo reference="${frame_prefix}_link">
+            <material>Gazebo/Yellow</material>
+        </gazebo>
+    </xacro:macro>
+</robot>

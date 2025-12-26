@@ -1,0 +1,34 @@
+<launch>
+    <param name="/use_sim_time" value="true" />
+
+    <arg name="world_name" default="$(find limo_gazebo_sim)/worlds/TD3.world"/>
+    <arg name="gui" default="true"/>
+
+    <node name="gazebo" pkg="gazebo_ros" type="gzserver" respawn="false" output="screen"
+          args="$(arg world_name)"
+          launch-prefix="bash -c 'source ~/RL/limo_RL-main/devel/setup.bash; $0 $@' "/>
+
+    <node name="gazebo_gui" pkg="gazebo_ros" type="gzclient" respawn="false" output="screen"
+          if="$(arg gui)"/>
+
+    <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find limo_description)/urdf/limo_ackerman.xacro'" />
+
+    <arg name="x" default="-4.0"/>
+    <arg name="y" default="4.0"/>
+    <arg name="z" default="0.15"/>
+    <arg name="yaw" default="0.0"/>
+    <node name="spawn_limo_model" pkg="gazebo_ros" type="spawn_model" args="-x $(arg x)
+              -y $(arg y)
+              -z $(arg z)
+              -Y $(arg yaw)
+              -unpause
+              -urdf
+              -param robot_description
+              -model 'limo'" />
+                                
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+    <node pkg="tf" type="static_transform_publisher" name="base_link_to_laser_link" args="0.105 0.0 0.08 0.0 0.0 0.0 /base_link /laser_link 10" />
+    <node pkg="tf" type="static_transform_publisher" name="base_link_to_imu_link" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_link /imu_link 10" />
+
+</launch>
