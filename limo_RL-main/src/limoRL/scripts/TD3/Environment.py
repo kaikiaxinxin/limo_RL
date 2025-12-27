@@ -125,8 +125,8 @@ class Env():
         done = False  # 是否结束的标志
 
         for i in range(len(scan.ranges)):
-            if scan.ranges[i] == float('Inf') or scan.ranges[i] >3.5:
-                scan_range.append(3.5)  # 处理无穷大或超过 3.5 的数据
+            if scan.ranges[i] == float('Inf') or scan.ranges[i] >7.0:
+                scan_range.append(7.0)  # 处理无穷大或超过 7.0 的数据
             elif np.isnan(scan.ranges[i]):
                 scan_range.append(0)  # 处理 NaN 数据
             else:

@@ -248,6 +248,64 @@
         <kinematic>0</kinematic>
       </link>
     </model>
+    <model name='init_area'>
+      <static>1</static>
+      <link name='init_area_link'>
+        <visual name='init_area_visual'>
+          <pose>-7.0 0.0 0.001 0 -0 0</pose>
+          <geometry>
+            <box><size>2.0 2.0 0.001</size></box>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Red</name>
+            </script>
+            <ambient>0.8 0.2 0.2 0.3</ambient>
+            <diffuse>0.8 0.2 0.2 0.3</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name='phi1_area'>
+      <static>1</static>
+      <link name='phi1_area_link'>
+        <visual name='phi1_area_visual'>
+          <pose>6.0 -6.0 0.001 0 -0 0</pose>
+          <geometry>
+            <box><size>2.0 2.0 0.001</size></box>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Blue</name>
+            </script>
+            <ambient>0.2 0.2 0.8 0.3</ambient>
+            <diffuse>0.2 0.2 0.8 0.3</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name='phi2_area'>
+      <static>1</static>
+      <link name='phi2_area_link'>
+        <visual name='phi2_area_visual'>
+          <pose>3.0 9.0 0.001 0 -0 0</pose>
+          <geometry>
+            <box><size>2.0 2.0 0.001</size></box>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Green</name>
+            </script>
+            <ambient>0.2 0.8 0.2 0.3</ambient>
+            <diffuse>0.2 0.8 0.2 0.3</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
     <gravity>0 0 -9.8066</gravity>
     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
     <atmosphere type='adiabatic'/>

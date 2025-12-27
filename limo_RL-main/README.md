@@ -9,7 +9,15 @@ cd ~/STL-Projects/limo_RL/limo_RL-main
 source devel/setup.bash
 roslaunch limo_gazebo_sim limo_ackerman.launch
 
+
 # 终端 2
 cd ~/STL-Projects/limo_RL/limo_RL-main
 source devel/setup.bash
 roslaunch limoRL limo_TD3.launch
+
+代码仓更新：
+cd ~/STL-Projects/limo_RL
+git status
+git add .
+git commit -m "xx"
+git push

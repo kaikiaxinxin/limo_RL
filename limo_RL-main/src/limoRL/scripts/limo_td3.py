@@ -38,7 +38,7 @@ if __name__=='__main__':
     agent = TD3(alpha=0.0003, beta=0.0003, state_dim=25,action_dim=2, actor_fc1_dim=400, actor_fc2_dim=300,
                 action_limit_v=ACTION_V_MAX,action_limit_w=ACTION_W_MAX,critic_fc1_dim=400, critic_fc2_dim=300,
                 ckpt_dir=CKPT_DIR, gamma=0.99,tau=0.005, action_noise=0.1, policy_noise=0.2, policy_noise_clip=0.5,
-                delay_time=2, max_size=10000000, batch_size=1024)
+                delay_time=2, max_size=10000000, batch_size=2048)
 
     # 初始化 ROS 节点，节点名为 limo_td3
     rospy.init_node('limo_td3')
