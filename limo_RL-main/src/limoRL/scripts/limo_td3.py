@@ -16,6 +16,7 @@ from TD3.Environment import Env
 from utils import plotLearning
 # 将当前文件所在目录的上一级目录添加到系统路径中，方便导入模块
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+import os
 
 
 if __name__=='__main__':
@@ -27,8 +28,11 @@ if __name__=='__main__':
     ACTION_V_MAX = 0.8 
     # 定义角速度的最大值，单位为 rad/s
     ACTION_W_MAX = 2.0 
-    # 定义模型参数保存的目录
-    CKPT_DIR = "/home/robot/RL/limo_RL-main/src/limoRL/train/TD3/model"
+    # 动态获取当前脚本的绝对路径，这样以后你把项目搬到哪里都能跑
+    curr_path = os.path.dirname(os.path.abspath(__file__))
+    # 设置模型保存路径 (注意这里用了 ../ 回退到上一级)
+    CKPT_DIR = curr_path + "/../train/TD3/model"
+    save_figure_path = curr_path + "/../train/TD3/png"
     
     # 初始化 TD3 智能体
     agent = TD3(alpha=0.0003, beta=0.0003, state_dim=25,action_dim=2, actor_fc1_dim=400, actor_fc2_dim=300,
@@ -53,16 +57,15 @@ if __name__=='__main__':
     env = Env(action_dim=ACTION_DIMENSION)
     # 初始化上一时刻的动作，初始值为全 0
     past_action = np.zeros(ACTION_DIMENSION)
-    # 定义保存学习曲线图片的目录
-    save_figure_path = "/home/robot/RL/limo_RL-main/src/limoRL/train/TD3/png"
+    
     # 用于记录每个回合的总奖励
     score_history = []
 
     
     # 加载模型 
-    agent.load_models(episode=1150)
+    # agent.load_models(episode=1150)
     # 开始训练，总共进行 50000 个回合
-    for e in range(1151,50000):
+    for e in range(1,50000):
         
         # 重置环境，获取初始状态
         state = env.reset()      
