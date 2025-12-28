@@ -1,0 +1,131 @@
+# 基于 Dual Critic TD3 与 F-MDP-S 的 Limo 机器人序贯 STL 导航
+
+本项目是论文 **《复杂未知环境下移动机器人序贯 STL 任务的深度强化学习导航》** 的官方代码实现（复现）。
+
+项目基于 ROS 和 Gazebo 仿真环境，使用 **AgileX Limo** 移动机器人，通过深度强化学习（TD3）解决具有严格时序逻辑约束（Sequential Signal Temporal Logic, STL）的导航任务（例如：“先到达 A 区，再到达 B 区，全程避障”）。
+
+## 🚀 核心特性
+
+* **序贯 F-MDP-S 状态建模**：
+* 引入“任务完成阶段标志位” () 和“STL 鲁棒度标志位” ()，将非马尔可夫的时序任务转化为马尔可夫状态，解决序贯任务中的“次序混淆”问题。
+
+
+* **双重评论家 (Dual Critic) 架构**：
+* 解耦 **任务进度奖励** () 和 **辅助/安全奖励** ()，分别使用独立的 Critic 网络进行价值评估，有效缓解多目标冲突导致的训练不稳定。
+
+
+* **结构化奖励函数**：
+* 包含阶段完成奖励、进度引导奖励、碰撞惩罚和效率惩罚。
+
+
+* **工程化实现**：
+* 基于 PyTorch 的模块化代码结构，支持断点续训、自动日志记录和参数配置。
+
+
+
+## 🛠️ 依赖环境
+
+* **操作系统**: Ubuntu 20.04 (推荐)
+* **ROS 版本**: Noetic
+* **仿真器**: Gazebo 11
+* **编程语言**: Python 3.8+
+* **Python 依赖库**:
+```bash
+pip3 install torch numpy pandas rospkg
+
+```
+
+
+
+## 📂 目录结构
+
+代码位于 `src/limoRL/scripts/STL-TD3/` 目录下，结构如下：
+
+```text
+STL-TD3-Final/
+├── main.py             # [入口] 主训练程序
+├── params.py           # [配置] 所有超参数、路径和任务区域定义
+├── stl_env.py          # [环境] 自定义 Gazebo 环境，实现 F-MDP-S 逻辑与奖励计算
+├── agent.py            # [算法] TD3 Dual Critic 智能体核心算法
+├── networks.py         # [模型] Actor 和 Critic 的 PyTorch 网络定义
+├── buffer.py           # [数据] 支持双重奖励存储的经验回放缓冲区
+├── trainer.py          # [训练] 训练循环、日志记录与模型保存逻辑
+├── utils.py            # [工具] 随机种子设置与 OU 噪声生成
+├── models/             # [输出] 训练好的模型文件 (.pth)
+└── logs/               # [输出] 训练数据日志 (.csv)
+
+```
+
+## ⚡ 快速开始
+
+### 1. 编译工作空间
+
+确保您已经下载了 Limo 的仿真包 (`limo_gazebo_sim`, `limo_description` 等) 并放置在 `src` 目录下。
+
+```bash
+cd ~/STL-Projects/limo_RL  # 进入您的工作空间根目录
+catkin_make
+source devel/setup.bash
+
+```
+
+### 2. 启动仿真环境 (终端 1)
+
+启动 Gazebo 并加载 Limo 机器人的阿克曼转向模型。
+
+```bash
+roslaunch limo_gazebo_sim limo_ackerman.launch
+
+```
+
+*注意：请确保 Gazebo GUI 正常弹出，且机器人处于空闲区域。*
+
+### 3. 开始训练 (终端 2)
+
+运行主程序开始训练。
+
+```bash
+source devel/setup.bash
+cd src/limoRL/scripts/STL-TD3-Final/
+python3 main.py
+
+```
+
+## ⚙️ 参数配置
+
+所有可调整的参数均位于 `params.py` 文件中，您可以根据需要修改：
+
+* **任务区域**: 修改 `GOAL_A_POS` 和 `GOAL_B_POS` 坐标。
+* **奖励权重**: 调整 `W_STAGE`, `W_PROG`, `W_COLL` 等以改变奖励函数的行为。
+* **训练参数**: 修改 `BATCH_SIZE`, `LR_ACTOR`, `TOTAL_STEPS` 等。
+
+```python
+# params.py 示例
+GOAL_A_POS = [2.0, 2.0]   # 阶段 1 目标
+GOAL_B_POS = [2.0, -2.0]  # 阶段 2 目标
+W_STAGE = 20.0            # 完成阶段的奖励值
+
+```
+
+## 📊 结果监控
+
+训练过程中的数据会自动保存到 `logs/training_log.csv`。包含以下字段：
+
+* `episode`: 回合数
+* `reward`: 回合总奖励
+* `steps`: 回合步数
+* `stage`: 任务完成状态 (例如 `[1.0, 0.0]` 表示完成阶段A，未完成阶段B)
+
+您可以使用 Pandas 读取该 CSV 文件并绘制训练曲线。
+
+## 🤖 算法细节
+
+### F-MDP-S 状态定义
+
+状态空间  (28维) 包含：
+
+1. **激光雷达 (20维)**: 降采样后的环境几何信息。
+2. **机器人状态 (4维)**: 相对目标的局部坐标  和 航向角 。
+3. **任务标志位 (4维)**:
+* : 阶段完成标志 (0/1)。
+* : STL 鲁棒度值 (归一化到 )，指示距离时序约束边界的程度。
