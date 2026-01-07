@@ -38,8 +38,11 @@ class TD3_Dual_Critic(object):
     def select_action(self, state):
         # 状态转 Tensor
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
-        return self.actor(state).cpu().data.numpy().flatten()
-
+        
+        # [新增] 必须加 no_grad，否则推理也会构建计算图，拖慢速度且浪费显存
+        with torch.no_grad():
+            action = self.actor(state).cpu().data.numpy().flatten()
+        return action
     def update(self, buffer):
         self.total_it += 1
         
@@ -89,6 +92,10 @@ class TD3_Dual_Critic(object):
         if self.total_it % params.POLICY_FREQ == 0:
             new_action = self.actor(state)
             
+            # [新增] 必须对 Actor 生成的动作进行物理限制裁剪，使其符合 Critic 的认知分布
+            # 注意保持梯度传递，不要用 torch.no_grad()
+            new_action[:, 0] = new_action[:, 0].clamp(0, params.MAX_V)
+            new_action[:, 1] = new_action[:, 1].clamp(-params.MAX_W, params.MAX_W)
             # Actor 目标是最大化 (Q_STL + Q_Aux)
             q1_s, _ = self.critic_stl(state, new_action)
             q1_a, _ = self.critic_aux(state, new_action)

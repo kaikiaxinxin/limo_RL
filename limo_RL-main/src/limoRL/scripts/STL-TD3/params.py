@@ -21,7 +21,7 @@ TASK_CONFIG = [
 NUM_TASKS = len(TASK_CONFIG)
 DT = 0.1  # 控制周期 0.1s
 
-INIT_POS = [-7.0, 0.0]  # 修改: -2.0 -> -7.0
+INIT_POS = [-7.0, 0.0]  
 # === 状态空间 ===
 LIDAR_DIM = 20            
 ROBOT_STATE_DIM = 6       # [x, y, cos, sin, v, w]
@@ -47,7 +47,7 @@ START_STEPS = 5000
 POLICY_FREQ = 2
 EVAL_INTERVAL = 5000      
 EVAL_EPISODES = 5         
-UPDATE_ITERATION =20     
+UPDATE_ITERATION =2     
 ACTION_REPEAT = 3         
 
 # === 奖励权重 ===

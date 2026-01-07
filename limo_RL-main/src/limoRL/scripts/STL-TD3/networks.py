@@ -29,10 +29,8 @@ class Actor(nn.Module):
         a = F.relu(self.l1(state))
         a = F.relu(self.l2(a))
         out = self.l3(a)
-        
-        # [核心优化] 增加 0.1 的偏移量
-        # 范围从 [0, MAX_V] 变为 [0.1, MAX_V + 0.1]
-        v = (torch.sigmoid(out[:, 0]) * self.max_action_v) + 0.1
+
+        v = (torch.sigmoid(out[:, 0]) * self.max_action_v) 
         
         # 角速度保持 Tanh，范围 [-MAX_W, MAX_W]
         w = torch.tanh(out[:, 1]) * self.max_action_w
