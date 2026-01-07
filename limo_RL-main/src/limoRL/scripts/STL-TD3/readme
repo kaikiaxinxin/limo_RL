@@ -1,131 +1,1527 @@
-# 基于 Dual Critic TD3 与 F-MDP-S 的 Limo 机器人序贯 STL 导航
+当前论文初稿还是有很多问题，请根据如下修改的要点，逐一完善修改，确保都修改完成后再整体输出
 
-本项目是论文 **《复杂未知环境下移动机器人序贯 STL 任务的深度强化学习导航》** 的官方代码实现（复现）。
+论文修改
 
-项目基于 ROS 和 Gazebo 仿真环境，使用 **AgileX Limo** 移动机器人，通过深度强化学习（TD3）解决具有严格时序逻辑约束（Sequential Signal Temporal Logic, STL）的导航任务（例如：“先到达 A 区，再到达 B 区，全程避障”）。
+1.图注内容太多，详细的内容写在正文中即可
 
-## 🚀 核心特性
+2.摘要太多了，要进行精简，创新点分条摘出
 
-* **序贯 F-MDP-S 状态建模**：
-* 引入“任务完成阶段标志位” () 和“STL 鲁棒度标志位” ()，将非马尔可夫的时序任务转化为马尔可夫状态，解决序贯任务中的“次序混淆”问题。
+3.正文格式调对参考附件标准的Trans格式，全文整体更改
+
+4.算法流程描述的太详细了，要缩短简洁进练功公式符号给出，文字解释在后面正文表述即可
+
+5.要显得专业性和透明性，要把训练的配置信息在实验模块用表格形式显示出来
+
+6.对比实验部分，把三个不同纬度的激光雷达换成10、20、30维度，然后20维度最好的哪一组
+
+7.准备加一个模型空间结构图和整体方法原理图，请留好位置
+
+原文是：\documentclass[lettersize,journal]{IEEEtran}
+
+\usepackage{amsmath,amsfonts,amssymb}
+
+% 使用 algorithmicx 的 algpseudocode 风格
+
+\usepackage{algorithm}
+
+\usepackage[noend]{algpseudocode}
+
+\usepackage{array}
+
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+
+% Ensure figure captions are centered
+
+\usepackage{caption}
+
+\captionsetup{justification=centering,singlelinecheck=false}
+
+\usepackage{textcomp}
+
+\usepackage{stfloats}
+
+\usepackage{url}
+
+\usepackage{verbatim}
+
+\usepackage{graphicx}
+
+% 用于条件包含图片
+
+\usepackage{xeCJK}
+
+\usepackage{balance}
+
+\usepackage{etoolbox}
+
+\usepackage{amsthm}
+
+\usepackage{cite}
+
+\usepackage{booktabs} % 增加三线表支持，使表格更专业
+
+\usepackage{multirow} % 支持表格合并行
 
 
-* **双重评论家 (Dual Critic) 架构**：
-* 解耦 **任务进度奖励** () 和 **辅助/安全奖励** ()，分别使用独立的 Critic 网络进行价值评估，有效缓解多目标冲突导致的训练不稳定。
 
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
 
-* **结构化奖励函数**：
-* 包含阶段完成奖励、进度引导奖励、碰撞惩罚和效率惩罚。
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
 
-
-* **工程化实现**：
-* 基于 PyTorch 的模块化代码结构，支持断点续训、自动日志记录和参数配置。
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
 
 
-## 🛠️ 依赖环境
+% Define a macro for the RRT*-STL baseline
 
-* **操作系统**: Ubuntu 20.04 (推荐)
-* **ROS 版本**: Noetic
-* **仿真器**: Gazebo 11
-* **编程语言**: Python 3.8+
-* **Python 依赖库**:
-```bash
-pip3 install torch numpy pandas rospkg
+\newcommand{\RRTSTL}{RRT*-STL}
 
-```
+\newcommand{\DRLSTL}{TD3-STL} % 统一代号，正文中使用 TD3-STL 或 "Ours"
+
+\newcommand{\TDSTL}{TD3-STL}
 
 
 
-## 📂 目录结构
+% 定义definition环境
 
-代码位于 `src/limoRL/scripts/STL-TD3/` 目录下，结构如下：
+\newtheorem{definition}{定义}
 
-```text
-STL-TD3-Final/
-├── main.py             # [入口] 主训练程序
-├── params.py           # [配置] 所有超参数、路径和任务区域定义
-├── stl_env.py          # [环境] 自定义 Gazebo 环境，实现 F-MDP-S 逻辑与奖励计算
-├── agent.py            # [算法] TD3 Dual Critic 智能体核心算法
-├── networks.py         # [模型] Actor 和 Critic 的 PyTorch 网络定义
-├── buffer.py           # [数据] 支持双重奖励存储的经验回放缓冲区
-├── trainer.py          # [训练] 训练循环、日志记录与模型保存逻辑
-├── utils.py            # [工具] 随机种子设置与 OU 噪声生成
-├── models/             # [输出] 训练好的模型文件 (.pth)
-└── logs/               # [输出] 训练数据日志 (.csv)
+\newtheorem{remark}{备注}
 
-```
 
-## ⚡ 快速开始
 
-### 1. 编译工作空间
+\begin{document}
 
-确保您已经下载了 Limo 的仿真包 (`limo_gazebo_sim`, `limo_description` 等) 并放置在 `src` 目录下。
 
-```bash
-cd ~/STL-Projects/limo_RL  # 进入您的工作空间根目录
-catkin_make
-source devel/setup.bash
 
-```
+\title{复杂未知环境下移动机器人序贯STL任务的深度强化学习导航}
 
-### 2. 启动仿真环境 (终端 1)
 
-启动 Gazebo 并加载 Limo 机器人的阿克曼转向模型。
 
-```bash
-roslaunch limo_gazebo_sim limo_ackerman.launch
+\author{张志根%
 
-```
+\thanks{本工作得到国家自然科学基金项目（编号：XXXXXX）的资助。}}
 
-*注意：请确保 Gazebo GUI 正常弹出，且机器人处于空闲区域。*
 
-### 3. 开始训练 (终端 2)
 
-运行主程序开始训练。
+\markboth{Journal of \LaTeX\ Class Files,~Vol.~XX, No.~XX, December~2025}%
 
-```bash
-source devel/setup.bash
-cd src/limoRL/scripts/STL-TD3-Final/
-python3 main.py
+{Zhang: 复杂未知环境下移动机器人序贯STL任务的深度强化学习导航}
 
-```
 
-## ⚙️ 参数配置
 
-所有可调整的参数均位于 `params.py` 文件中，您可以根据需要修改：
+\maketitle
 
-* **任务区域**: 修改 `GOAL_A_POS` 和 `GOAL_B_POS` 坐标。
-* **奖励权重**: 调整 `W_STAGE`, `W_PROG`, `W_COLL` 等以改变奖励函数的行为。
-* **训练参数**: 修改 `BATCH_SIZE`, `LR_ACTOR`, `TOTAL_STEPS` 等。
+\begin{abstract}
 
-```python
-# params.py 示例
-GOAL_A_POS = [2.0, 2.0]   # 阶段 1 目标
-GOAL_B_POS = [2.0, -2.0]  # 阶段 2 目标
-W_STAGE = 20.0            # 完成阶段的奖励值
+移动机器人在复杂未知环境中执行具有时序逻辑约束的导航任务面临着严峻挑战。传统的基于信号时序逻辑（STL）的规划方法通常依赖于精确的全局环境模型，导致在环境未知时难以适用。为此，研究者们探索了将强化学习（RL）与STL相融合的途径，以期实现无模型决策。然而，现有方法仍面临双重挑战：一方面，其在处理严格序贯任务时，常因奖励稀疏和多目标冲突而导致训练不稳定；另一方面，相关研究往往侧重于低维状态空间的抽象研究，在如何有效融合高维感知数据（如激光雷达）以及解决仿真到实物（Sim-to-Real）迁移难题方面仍存在不足。本文提出一种基于TD3强化学习的序贯STL任务导航框架，通过设计序贯F-MDP（F-MDP-S）模型、结构化奖励函数和双重评论家网络架构，有效解决了上述问题。F-MDP-S模型创新性地引入任务完成阶段标志位，将历史时序逻辑信息与降维后的激光雷达特征共同编码，既避免了维度灾难又保证了对动态环境的感知能力。结构化的分层奖励函数将复杂的全局时序约束分解为阶段完成奖励、进度引导奖励和安全约束奖励。双重评论家网络架构分别解耦评估STL任务价值和辅助约束价值，显著提升了训练稳定性。在Gym简化环境和Gazebo高保真仿真环境中的实验表明，所提方法在路径长度上平均缩短31.2\%，任务完成时间减少28.5\%，相比传统\RRTSTL 方法具有显著优势，且在不同激光雷达扫描密度下保持鲁棒性。该研究为移动机器人在动态未知环境中执行复杂时序约束任务提供了有效的解决方案。更重要的是，该策略成功部署于Limo实物机器人，验证了其在真实感知噪声下的鲁棒性与迁移能力。
 
-```
+\end{abstract}
 
-## 📊 结果监控
 
-训练过程中的数据会自动保存到 `logs/training_log.csv`。包含以下字段：
 
-* `episode`: 回合数
-* `reward`: 回合总奖励
-* `steps`: 回合步数
-* `stage`: 任务完成状态 (例如 `[1.0, 0.0]` 表示完成阶段A，未完成阶段B)
+\begin{IEEEkeywords}
 
-您可以使用 Pandas 读取该 CSV 文件并绘制训练曲线。
+强化学习，信号时序逻辑，移动机器人导航，时序约束，TD3算法，序贯任务
 
-## 🤖 算法细节
+\end{IEEEkeywords}
 
-### F-MDP-S 状态定义
 
-状态空间  (28维) 包含：
 
-1. **激光雷达 (20维)**: 降采样后的环境几何信息。
-2. **机器人状态 (4维)**: 相对目标的局部坐标  和 航向角 。
-3. **任务标志位 (4维)**:
-* : 阶段完成标志 (0/1)。
-* : STL 鲁棒度值 (归一化到 )，指示距离时序约束边界的程度。
+\section{引言}
+
+\begin{sloppypar}
+
+\IEEEPARstart{}{随}着移动机器人在仓储物流、家庭服务及巡检等复杂环境中的应用不断扩展，机器人不仅需要实现点到点的无碰撞导航，还需具备理解和执行复杂时序逻辑任务的能力。想象一个化工厂抢险场景：一台机器人必须先在限定时间内\textbf{找到幸存者（A）}，并在该区域停留采集数据，再前往安全区\textbf{发送位置信号（B）}。若顺序被打乱、阶段被跳过或超时，任务均将宣告失败甚至引发额外风险——这类兼具\textbf{严格序贯}与硬性时间约束的任务正是本文关注的对象。信号时序逻辑（Signal Temporal Logic, STL）作为一种能够精确描述连续信号时序和逻辑约束的形式化方法，为描述此类任务提供了强有力的数学工具\cite{raman2014model, lindemann2019control}。
+
+
+
+传统的STL任务求解常采用基于采样的规划方法（如\RRTSTL）或混合整数线性规划（MILP）。然而，这些方法通常依赖于精确的全局地图信息，计算复杂度随任务视界长度呈指数增长，且难以应对动态未知的环境\cite{aksaray2016q, yin2024formal}。近年来，深度强化学习（DRL）因其强大的感知与决策能力，在无模型机器人控制领域展现出巨大潜力。
+
+
+
+将STL与DRL结合是当前的研究热点，但也面临严峻挑战。Aksaray等人\cite{aksaray2016q}提出的$\tau$-MDP虽然解决了非马尔可夫性问题，但状态维度随时间窗口线性增长，难以扩展。针对连续控制问题，Ikemoto等人\cite{ikemoto2022deep}提出了基于拉格朗日松弛的约束DRL算法。然而，此类方法在处理具有严格先后顺序的“序贯任务”时，往往因为初期探索难以触发布尔逻辑满足条件，导致奖励极其稀疏，学习效率低下。Wang等人\cite{wang2024temporal}虽然提出了反事实经验回放以提高样本利用率，但该方法主要基于表格型Q学习，本质上仅适用于离散动作空间和简化的低维网格环境。面对基于激光雷达（LiDAR）等高维感知输入且需要精细速度调节的连续控制任务时，此类方法难以直接扩展应用。
+
+
+
+针对上述问题，本文提出了一种基于TD3算法的序贯STL任务导航框架。与现有工作相比，本文通过设计显式的“任务完成阶段标志位”，将序贯逻辑内化为状态的一部分，并配合“双重评论家”架构，使智能体能够明确区分任务进度收益与安全避障成本。本文的主要贡献包括：
+
+\begin{enumerate}
+
+    \item 提出了序贯F-MDP（F-MDP-S）模型。通过引入任务完成阶段标志位 ($c_t$)，我们将连续的状态空间在逻辑维度上划分为离散的“阶梯”。$c_t$ 充当了“逻辑锁”的角色，强制智能体必须在完成当前阶段任务（如到达区域 A）并解锁下一阶段标志位后，才能激活后续任务（如到达区域 B）的奖励信号。这一机制将非马尔可夫的序贯依赖转化为状态空间中的显式特征，有效避免了因次序混淆导致的局部最优，同时结合降维后的激光雷达感知特征，实现了无地图环境下的稳健决策。
+
+    \item 设计了结构化的分层奖励函数。结合稀疏的阶段奖励与稠密的进度奖励，为序贯任务提供清晰的阶段性引导和连续优化信号，有效解决了长视界任务中的探索稀疏与\textbf{信用分配}问题。
+
+    \item 构建了双重评论家网络架构。分别独立评估STL任务价值与辅助约束（安全、效率）价值，缓解了“安全性”目标与“任务完成率”目标之间潜在的梯度冲突，避免了策略陷入因过度保守而导致的局部最优。
+
+    \item 在Gym简化环境、Gazebo高保真仿真以及\textbf{实物Limo机器人}上进行了综合验证。定量对比和实物部署证明了该方法在不同传感器配置及动态场景下的鲁棒性，并展示了优异的\textbf{零样本迁移}能力。
+
+\end{enumerate}
+
+\end{sloppypar}
+
+
+
+\section{相关工作}
+
+
+
+\subsection{基于模型的形式化控制与规划}
+
+传统的STL控制合成通常依赖于系统的精确数学模型。早期的工作如Raman等人\cite{raman2014model}将STL规范编码为混合整数线性约束，通过混合整数线性规划（MILP）在模型预测控制（MPC）框架下求解。这种方法虽然具有完备性，但计算复杂度随任务视界呈指数增长，难以实时应用。为提高效率，Lindemann等人\cite{lindemann2019control}提出了基于控制屏障函数（CBF）的方法，将时序逻辑转化为状态空间的前向不变集约束，显著降低了计算量。
+
+
+
+在部分未知环境中，基于采样的规划方法如RRT*被广泛扩展用于处理STL任务。Tian等人\cite{tian2023two}提出了一种双阶段框架，结合离线RRT*探索与在线时间弹性带（TEB）规划。然而，这类方法本质上依赖于重规划来应对动态变化，在面对高动态障碍物或复杂感知输入时，其实时性和鲁棒性往往受限于规划算法的搜索效率。此外，基于优化的方法通常需要对环境进行凸分解或简化，难以直接处理激光雷达等原始感知数据。
+
+
+
+\subsection{STL约束的数据驱动与强化学习方法}
+
+当系统模型未知或环境高度复杂时，强化学习（RL）成为一种有前景的替代方案。Li等人\cite{li2017reinforcement}和Balakrishnan等人\cite{balakrishnan2019structured}探索了将STL的鲁棒度（Robustness）作为奖励信号引导RL训练，实现了连续空间的控制合成。为了处理STL的非马尔可夫性，Aksaray等人\cite{aksaray2016q}提出了$\tau$-MDP框架，将历史状态窗口堆叠到当前状态中。
+
+
+
+近期研究致力于解决STL-RL中的奖励稀疏和探索困难问题。Berducci等人\cite{berducci2025hprs}提出了分层势能奖励塑形（HPRS），通过自动推导势能函数来提供密集的奖励信号，同时保持策略最优性。Wang等人\cite{wang2024temporal}引入了反事实经验回放机制，利用STL的逻辑结构生成合成经验以加速训练。Yifru等人\cite{yifru2024concurrent}则提出了一种双层优化架构，同时学习控制策略和未知的环境安全参数。
+
+
+
+然而，现有方法在处理\textbf{序贯任务}（如“先去A再去B”）时仍存在局限性：直接使用鲁棒度作为奖励在序贯任务初期往往导致奖励极其稀疏，因为后续子任务的满足依赖于前序子任务的完成；此外，现有方法在处理高维感知输入（如激光雷达）与抽象逻辑状态的融合时，缺乏明确的架构设计来平衡任务进度与避障安全。
+
+
+
+\subsection{状态表征与非马尔可夫性处理}
+
+STL任务本质上是非马尔可夫的，即当前的最优动作依赖于历史轨迹。除了$\tau$-MDP导致的维度灾难外，Venkataraman等人\cite{venkataraman2020tractable}提出了F-MDP框架，通过引入一组离散标志位来追踪子任务状态，有效降低了状态维度。
+
+
+
+另一类主流方法是利用循环神经网络（RNN）或LSTM来隐式编码历史信息\cite{liu2021recurrent}。然而，RNN本质上是在学习一个隐式的历史表征，它往往将“用于动力学预测的历史轨迹”与“需要记住的任务逻辑进度”混淆在同一个隐向量中。这种“黑盒”式的隐式记忆存在双重隐患：其一，随着时间步的增加，早期关键逻辑状态的影响可能因遗忘问题（Forgetting）被削弱；其二，由于缺乏明确的状态划分，RNN难以保证逻辑满足的严格性。相比之下，本文提出的F-MDP-S采用显式（Explicit）、可解释（Interpretable）且基于硬性约束（Hard constraints driven）的标志位机制。通过离散的 $c_t$ 标志位，我们为序贯任务提供了确定性的阶段划分依据。这种设计相当于在状态空间中构建了不可逆的“单向阀”，告诉智能体：“除非你完成了前序任务 A，否则前往 B 的行为是无效的”。这从原理上消除了遗忘风险，更为满足严格的逻辑约束提供了直接且可验证的状态支撑。
+
+
+
+\subsection{基于感知的导航与 Sim-to-Real 迁移}
+
+在实际机器人应用中，仅依赖抽象逻辑状态是不够的，策略必须能够处理高维感知输入。虽然深度强化学习在基于视觉或激光雷达的导航中已取得巨大成功\cite{gu2017deep, nguyen2020deep}，也有研究利用端到端的深度神经网络架构（如OTDPP-Net）在未知环境中实现了毫秒级的实时路径规划\cite{wu2022achieving}，但将其与复杂的时序逻辑约束结合的研究仍处于起步阶段。
+
+
+
+值得注意的是，大多数现有的STL-RL研究，如\cite{venkataraman2020tractable, yifru2024concurrent, ikemoto2022deep}，均未涉及实物实验，仅在理想仿真环境中验证。本文不仅在Gazebo高保真仿真器中验证了算法处理激光雷达数据的能力，还通过Limo机器人的实物实验，展示了所提框架在 \textbf{Sim-to-Real} 迁移中的鲁棒性，填补了STL-RL理论与工程实践之间的空白。
+
+
+
+\section{预备知识}
+
+\subsection{信号时序逻辑}
+
+\subsubsection{系统模型与基本概念}
+
+考虑离散时间系统：
+
+\begin{equation}
+
+x_{k+1} = f(x_k, a_k) + w_k
+
+\end{equation}
+
+其中 $x_k \in \mathcal{X}$ 是系统状态，$a_k \in \mathcal{A}$ 是控制动作，$w_k$ 是系统噪声。设 $\mathcal{AP}$ 为原子命题的集合，每个原子命题 $\mu \in \mathcal{AP}$ 定义为形如 $h(x) \leq d$ 的谓词，其中 $h: \mathcal{X} \to \mathbb{R}$ 为状态函数，$d \in \mathbb{R}$ 为阈值。
+
+
+
+轨迹定义为一个有限长度的状态序列 $\xi = x_0, x_1, \ldots, x_T$，其中 $T$ 为时间范围。系统轨迹的行为可以通过信号 $s: [0, T] \to \mathbb{R}^m$ 表示，例如机器人的位置、速度或其他物理量的时间序列。
+
+
+
+\subsubsection{STL语法与语义}
+
+\textbf{语法定义：} STL公式 $\phi$ 由以下递归语法定义：
+
+\begin{align}
+
+\phi ::= & \top ~|~ \mu ~|~ \lnot \phi ~|~ \phi_1 \land \phi_2 ~|~ \phi_1 \lor \phi_2 \nonumber \\
+
+& |~ G_{[a,b]} \phi ~|~ F_{[a,b]} \phi ~|~ \phi_1 U_{[a,b]} \phi_2
+
+\end{align}
+
+其中：
+
+\begin{itemize}
+
+\item $\top$ 是真值常量（总是满足）。
+
+\item $\mu \in \mathcal{AP}$ 是原子命题 $h(x) \leq d$，定义一个状态谓词。
+
+\item $\lnot, \land, \lor$ 分别为逻辑非、与、或算子。
+
+\item $G_{[a,b]} \phi$（Globally）表示在时间区间 $[a, b]$ 内，公式 $\phi$ 始终成立。
+
+\item $F_{[a,b]} \phi$（Finally）表示在时间区间 $[a, b]$ 内，公式 $\phi$ 至少在某个时刻成立。
+
+\item $\phi_1 U_{[a,b]} \phi_2$（Until）表示存在一个时刻 $t' \in [t+a, t+b]$ 使得 $\phi_2$ 成立，且在 $[t, t')$ 内 $\phi_1$ 一直成立。
+
+\item $a, b \in \mathbb{N}_{\geq 0}$ 为时间边界。
+
+\end{itemize}
+
+
+
+\textbf{定量语义（鲁棒度）：} STL公式的定量语义（鲁棒度）$\rho_t(\phi, \xi)$ 定义如下，其值为实数。若 $\rho_t(\phi, \xi) > 0$，则称轨迹 $\xi$ 在时刻 $t$ 满足公式 $\phi$；若 $\rho_t(\phi, \xi) < 0$，则称不满足。鲁棒度值的大小表示满足（或违反）的程度。
+
+
+
+对于原子命题：
+
+\begin{equation}
+
+\rho_t(\mu, \xi) = d - h(x_t)
+
+\end{equation}
+
+
+
+对于逻辑和时态算子：
+
+\begin{align}
+
+\rho_t(\lnot \phi, \xi) &= -\rho_t(\phi, \xi) \nonumber \\
+
+\rho_t(\phi_1 \land \phi_2, \xi) &= \min(\rho_t(\phi_1, \xi), \rho_t(\phi_2, \xi)) \nonumber \\
+
+\rho_t(\phi_1 \lor \phi_2, \xi) &= \max(\rho_t(\phi_1, \xi), \rho_t(\phi_2, \xi)) \nonumber \\
+
+\rho_t(G_{[a,b]} \phi, \xi) &= \min_{t' \in [t+a, t+b]} \rho_{t'}(\phi, \xi) \nonumber \\
+
+\rho_t(F_{[a,b]} \phi, \xi) &= \max_{t' \in [t+a, t+b]} \rho_{t'}(\phi, \xi) \nonumber \\
+
+\rho_t(\phi_1 U_{[a,b]} \phi_2, \xi) &= \max_{t' \in [t+a, t+b]} \min(\rho_{t'}(\phi_2, \xi), \min_{t'' \in [t, t')} \rho_{t''}(\phi_1, \xi))
+
+\end{align}
+
+
+
+\subsubsection{布尔满足性与鲁棒性}
+
+给定轨迹 $\xi$ 和公式 $\phi$，若 $\rho_0(\phi, \xi) \geq 0$，则称轨迹满足公式（记为 $\xi \models \phi$）。这是一个二值判断：满足或不满足。
+
+
+
+\textbf{鲁棒性的重要性质：} 对于任意 $x \in \mathcal{X}$ 和STL公式 $\phi$，若 $\rho_t(\phi, x) < 0$，则 $x$ 违反 $\phi$；若 $\rho_t(\phi, x) > 0$，则 $x$ 满足 $\phi$。鲁棒度的绝对值越大，表示系统离约束边界越远，从而具有更大的满足裕度或违反裕度。这个性质对于设计控制器和奖励函数至关重要，因为我们可以利用鲁棒度作为连续的优化目标，而不仅仅是离散的布尔判断。
+
+
+
+\subsubsection{时间范围与计算复杂性}
+
+对于一个STL公式 $\phi$，其\textbf{时间范围}定义为评估公式满足性所需的轨迹最小长度。例如，公式 $F_{[0, T]} \mu$ 的时间范围为 $T+1$，因为我们需要查看至少 $T+1$ 个时间步的轨迹数据才能判断是否存在某个时刻满足 $\mu$。
+
+
+
+这一特性对我们的问题至关重要：在强化学习中，智能体需要基于当前和历史状态做决策，但STL公式涉及未来的时间约束。因此，我们需要在状态空间中显式编码足够的历史信息（通过我们设计的标志位机制），以使决策过程能够追踪和满足这些时间约束。
+
+
+
+\textbf{本文的关键贡献之一}是通过任务完成阶段标志位 $c_t$ 和子任务标志位 $f_t$，将高维历史轨迹中蕴含的时序约束信息压缩为低维马尔可夫状态，从而绕过了时间范围带来的维度爆炸问题。
+
+
+
+\subsection{TD3强化学习算法}
+
+
+
+TD3（Twin Delayed Deep Deterministic Policy Gradient）算法\cite{fujimoto2018addressing}是基于DDPG算法\cite{lillicrap2015continuous}的改进版本。针对DDPG在连续控制任务中常见的Q值过高估计（Overestimation）问题，TD3引入了以下三个关键技术，以显著提高算法在复杂约束环境下的稳定性和收敛性能：
+
+
+
+\subsubsection{裁剪的双Q学习 (Clipped Double Q-Learning)}
+
+TD3使用两个独立的评论家网络（Critic）$Q_{\omega_1}$和$Q_{\omega_2}$，并在计算目标值时取两者的最小值：
+
+\begin{equation}
+
+y = r + \gamma \min_{i=1,2} Q_{\omega_i'}(s', \pi_{\theta'}(s') + \epsilon)
+
+\label{eq:td3_target}
+
+\end{equation}
+
+其中$\epsilon \sim \text{clip}(\mathcal{N}(0, \sigma), -c, c)$是添加的噪声。
+
+在本文的STL导航任务中，由于时序逻辑约束的复杂性和稀疏的阶段奖励，价值函数容易出现异常波动。这一机制有效抑制了Q值的过高估计偏差，防止策略在探索初期陷入次优解。
+
+
+
+\subsubsection{目标策略平滑 (Target Policy Smoothing)}
+
+通过向目标动作添加截断的正态分布噪声来平滑Q值估计：
+
+\begin{equation}
+
+a'(s') = \text{clip}(\pi_{\theta'}(s') + \text{clip}(\epsilon, -c, c), a_{low}, a_{high})
+
+\label{eq:td3_smooth}
+
+\end{equation}
+
+该机制作为一种正则化手段，促使价值函数在动作空间局部保持平滑。对于基于激光雷达感知的移动机器人而言，这有助于智能体学习到对传感器噪声不敏感的鲁棒控制策略，从而生成更平滑的运动轨迹。
+
+
+
+\subsubsection{延迟策略更新 (Delayed Policy Update)}
+
+策略网络（Actor）和目标网络的更新频率低于Q网络，通常每更新$d$次（例如$d=2$）评论家网络才更新一次策略网络。
+
+通过确保在价值函数估计相对收敛后再更新策略，减少了策略更新的方差，这对于包含严格序贯约束的长视界任务训练至关重要。
+
+
+
+TD3算法的损失函数定义如下：
+
+
+
+评论家损失（最小化均方贝尔曼误差）：
+
+\begin{equation}
+
+\mathcal{L}(\omega_i) = \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}}[(Q_{\omega_i}(s,a) - y)^2], \quad i=1,2
+
+\label{eq:critic_loss}
+
+\end{equation}
+
+
+
+执行家损失（最大化Q值）：
+
+\begin{equation}
+
+\mathcal{L}(\theta) = -\mathbb{E}_{s \sim \mathcal{D}}[Q_{\omega_1}(s, \pi_{\theta}(s))]
+
+\label{eq:actor_loss}
+
+\end{equation}
+
+
+
+\section{问题阐述}
+
+\subsection{系统模型}
+
+
+
+我们考虑离散时间动态系统描述的移动机器人（Limo）：
+
+\begin{equation}
+
+x_{t+1} = f(x_t, u_t) + \Delta_w w_t,
+
+\end{equation}
+
+其中 $x_t \in X$ 为系统状态（如位置、姿态），$u_t \in U$ 为控制输入（线速度、角速度），$w_t \in W$ 为系统噪声；时间指标为 $t \in \{0, 1, \ldots\}$。系统函数 $f$ 和噪声分布未知。
+
+
+
+机器人搭载2D激光雷达。在每个时间步 $t$，激光雷达输出原始距离数据 $L_t^{\text{raw}} = \{l_1, l_2, \ldots, l_N\}$（$N$ 很大）。为适配深度强化学习网络，需将其处理为固定维度的特征向量。
+
+
+
+\subsection{任务描述}
+
+
+
+设计控制策略 $\pi(u_t | z_t)$，使机器人生成的轨迹 $x_{0:T}$ 满足给定的序贯STL规约。为了统一描述此类具有严格时序依赖的任务，我们采用嵌套的 Finally 算子定义序贯任务公式：
+
+\begin{equation}
+
+\Phi_{seq} = F_{[0,T_1]} (\phi_A \land F_{[0,T_2]} \phi_B)
+
+\label{eq:seq_task_def}
+
+\end{equation}
+
+其中 $\phi_A, \phi_B$ 分别表示到达区域 A 和区域 B 的原子命题（如 $x \in \text{Region}_A$）。
+
+
+
+\textbf{语义解释：} 该公式要求机器人在 $t \in [0, T_1]$ 的某个时刻首先满足 $\phi_A$（到达区域 A）；并且，在满足 $\phi_A$ 的时刻 $t$ 之后的 $[0, T_2]$ 时间窗口内，必须存在某个时刻 $t'$ 满足 $\phi_B$（到达区域 B）。这精确刻画了“先去 A，再去 B”的序贯逻辑，且允许机器人在两个目标之间自由规划路径，只要满足时间约束即可。
+
+
+
+由于系统动力学未知且任务复杂，本文采用深度强化学习求解。但标准RL算法面临以下挑战：
+
+\begin{enumerate}
+
+\item 为了评估STL规范，智能体需要记忆过去的系统状态
+
+\item 智能体必须理解并执行任务的先后顺序，仅仅满足所有子任务是不够的
+
+\item 需要设计一个能够引导智能体完成序贯任务的奖励函数
+
+\item 策略网络必须能高效处理高维的激光雷达输入，并将其与抽象的任务状态信息有效结合
+
+\end{enumerate}
+
+
+
+\section{方法框架总览}
+
+
+
+如下文所述，本文提出的序贯STL导航控制框架包含三个核心环节：
+
+
+
+\begin{enumerate}
+
+\item \textbf{状态构建（F-MDP-S）：} 原始激光雷达数据 $L_t^{\text{raw}}$ 经过分组降采样，与机器人位姿 $x_t$ 构成瞬时感知状态 $s_t$。同时，根据历史轨迹和当前STL公式计算子任务标志位 $f_t$ 与核心的\textbf{任务完成阶段标志位} $c_t$。三者拼接构成满足马尔可夫性质的扩展状态 $z_t = [s_t^T, f_t^T, c_t^T]^T$。
+
+
+
+\item \textbf{策略学习（双重评论家TD3）：} $z_t$ 作为输入，经由特征提取网络后，分别输入\textbf{Actor网络}、\textbf{STL评论家网络（评估任务进度价值）} 和\textbf{辅助评论家网络（评估安全、效率等约束价值）}。Actor输出连续动作 $a_t$，双重评论家则通过解耦的价值评估指导Actor的更新。
+
+
+
+\item \textbf{奖励生成：} 环境根据STL任务进度（由 $c_t$ 判断）和机器人状态（碰撞、距离等）生成结构化奖励 $R_t$，并分解为 $r_{\text{STL}}$ 和 $r_{\text{aux}}$，分别用于更新两个评论家网络。
+
+\end{enumerate}
+
+
+
+该框架实现了从原始感知到满足复杂序贯STL任务的端到端策略学习。
+
+
+
+\section{基于TD3的序贯STL任务控制器设计}
+
+
+
+\subsection{序贯F-MDP模型}
+
+
+
+为了解决上述挑战，我们提出了F-MDP-S模型，该模型的核心在于我们设计的序贯F-MDP机制以及与之配套的结构化奖励函数。
+
+
+
+\subsubsection{标志位与奖励函数的协同机制}
+
+
+
+在基于强化学习的STL任务求解框架中，任务标志位和奖励函数扮演着两个不同但至关重要的角色：标志位构成了智能体对时序任务进度的感知状态，而奖励函数则代表了环境对智能体行为是否满足STL规范的真实评判。两者通过智能体与环境的交互循环紧密联系在一起。智能体的策略网络 $\pi(a_i | z_i)$ 完全基于包含标志位的扩展状态 $z_i$ 来做出决策。而环境则根据真实的轨迹计算奖励，用以更新策略网络，使其学习将特定的标志位模式（感知）映射到能够最大化长期真实奖励（评判）的动作上。
+
+
+
+\subsubsection{状态信息的预处理：STL子任务标志位 $\hat{f}_t$}
+
+
+
+为了评估STL公式，智能体需要关于历史轨迹的信息，仅凭当前物理状态 $x_t$ 是不够的。传统方法如MDP通过堆叠历史状态 $z_t = [x_{t-r+1}, \ldots, x_t]$ 来构建扩展状态，但这会导致状态维度随边界长度线性增长，引发维度灾难。为解决此问题，我们参考并扩展了基于标志位的方法，通过预处理将高维的历史轨迹信息压缩为低维的标志位向量，作为历史信息的充分统计量，从而使决策过程满足马尔可夫属性。
+
+
+
+\begin{definition}[STL子任务标志位 $f_t$]
+
+对于每个STL子公式 $\phi_i$，其标志位 $f_t^i \in [-0.5, 0.5]$ 按以下规则计算，归一化地表示该子任务在最近一个时间窗口内的满足情况。
+
+
+
+- 对于"最终"算子 $F_{[t_s,t_e]}$，$f_t^i$ 表示在时间窗内满足原子谓词的最新时刻的归一化值：
+
+\begin{equation}
+
+f_t^i = \max \left\{ \frac{l - t_s + 1}{t_e - t_s + 1} \mid l \in \{t_s, \ldots, t_e\} \land x_{t-t_s+l} \models \phi_i \right\}
+
+\label{eq:f_t_finally}
+
+\end{equation}
+
+该值越大表示最近一次满足的时间越晚。
+
+
+
+- 对于"全局"算子 $G_{[t_s,t_e]}$，$f_t^i$ 表示在时间窗内持续满足原子谓词的时长的归一化值：
+
+\begin{equation}
+
+f_t^i = \max \left\{ \frac{t_e - l}{t_e - t_s} \mid l \in \{t_s, \ldots, t_e\} \land (\forall l' \in \{l, \ldots, t_e\}, x_{t-t_s+l'} \models \phi_i) \right\}
+
+\label{eq:f_t_globally}
+
+\end{equation}
+
+
+
+为便于神经网络处理，将原始标志值映射为中心化的范围 $\hat{f}_t^i \in [-0.5, 0.5]$。所有子任务的标志位共同构成向量 $\hat{f}_t = [\hat{f}_t^1, \ldots, \hat{f}_t^M]^T$。
+
+\end{definition}
+
+
+
+\begin{definition}[任务完成阶段标志位 $c_t$]
+
+设任务总共有 $M$ 个序贯阶段。$c_t \in \{0,1\}^M$ 是一个二进制向量，$c_t^k = 1$ 当且仅当前 $k$ 个子任务\textbf{均已按顺序完成}。其更新规则为：
+
+\begin{equation}
+
+c_t^k = \begin{cases}
+
+1, & \text{if } (k=1 \text{ or } c_{t-1}^{k-1}=1) \land (x_t \models \phi_k) \\
+
+c_{t-1}^{k}, & \text{otherwise}
+
+\end{cases}
+
+\label{eq:stage_flag_update}
+
+\end{equation}
+
+其中约定 $c_t^0 \equiv 1$（初始条件）。
+
+
+
+\textbf{$c_t$ 的引入是本文的关键创新}：它将任务历史"当前处于第几个阶段"这一信息编码为状态的一部分，使得决策过程 $P(z_{t+1} | z_t, a_t)$ 仅依赖于当前扩展状态 $z_t$，从而将原始的\textbf{非马尔可夫序贯决策问题转化为标准的马尔可夫决策过程（MDP）}。
+
+\end{definition}
+
+
+
+\subsubsection{序贯F-MDP的正式定义与机制解析}
+
+
+
+\begin{definition}[F-MDP-S]
+
+基于以上定义，我们提出序贯F-MDP (F-MDP-S)，由元组 $M = \langle Z, U, p_0^Z, p_1^Z, R_z \rangle$ 定义，其中：
+
+
+
+- $Z$ 是扩展状态空间。每个扩展状态 $z_t = [s_t^T, f_t^T, c_t^T]^T \in Z$。其中 $s_t$ 是瞬时物理状态。为了平衡感知信息中的丰富度和计算效率，我们对原始激光雷达数据 $L^{raw}$ 进行预处理：将270度的扫描数据均匀分组，并取每组的最小值作为代表，最终形成一个固定维度上的激光雷达特征向量 $L_t^l \in R^k$。因此，$s_t = [(L_t^l)^T, x_t^T]^T \in R^{k+n}$。$\hat{f}_t \in [-0.5, 0.5]^M$ 是STL子任务标志位向量，而 $c_t \in \{0,1\}^M$ 是任务完成阶段标志位向量。
+
+
+
+- $U \subseteq R^n$ 是控制动作空间，例如机器人的线速度和角速度。
+
+
+
+- $p_0^Z$ 是初始扩展状态的概率密度。在 $t = 0$ 时，机器人从一个初始物理状态分布 $p_0(x_0)$ 中采样得到 $x_0$，观察到 $L^{raw}$ 并处理得到 $L_t^l$，构成 $s_0$。
+
+
+
+- $ p^z(z_{t+1}|z_t, u_t) $ 是扩展状态的转移概率。给定 $ z_t $ 和动作 $ u_t $，下一物理状态 $ x_{t+1} $ 由未知的系统动态确定。下一时刻的标志位 $ f_{t+1} $ 和 $ c_{t+1} $ 则根据新的轨迹 $ x_{0,t+1} $，通过式(\ref{eq:f_t_finally}-\ref{eq:f_t_globally})和式(\ref{eq:stage_flag_update})确定性地更新。
+
+
+
+- $ R_z: Z \times U \rightarrow \mathbb{R} $ 是我们为序贯任务设计的奖励函数。
+
+\end{definition}
+
+
+
+\textbf{机制解析：} F-MDP-S 的核心优势在于 $c_t$ 标志位所构建的“状态阶梯”。在普通的 RL 状态空间中，位置 A 和位置 B 只是几何上的不同点。但在 F-MDP-S 中，状态 $z_t$ 包含了 $c_t$。
+
+\begin{itemize}
+
+    \item 当 $c_t = [0, 0]$ 时（未完成 A），智能体处于“第一阶梯”。此时，根据我们的奖励函数设计（见下节），只有前往 A 才能获得进度奖励，前往 B 是无利可图甚至可能被视为无效探索的。
+
+    \item 只有当智能体真正到达 A，触发 $c_t$ 翻转为 $[1, 0]$ 后，智能体才跃迁至“第二阶梯”。此时，前往 B 的奖励通道被激活。
+
+\end{itemize}
+
+这种设计显式地将逻辑上的序贯约束转化为了状态空间中的拓扑结构，迫使策略网络必须学习到这种因果依赖，从而完美解决了序贯任务中的次序混淆问题。
+
+
+
+\subsection{结构化奖励函数设计}
+
+
+
+我们的最终目标是找到一个策略 $\pi$，使其生成的轨迹满足给定的序贯STL公式 $\Phi$ 的概率最大化，即 $\max_{\pi} Pr[x_0^T - \Phi]$。该问题等价于最大化期望指示函数 $\max_{\pi} E[1(\rho(x_0^T - \Phi))]$。然而，直接从该目标推导出一个确切有效的奖励函数非常困难。因此，我们提出一种结构化的奖励函数，该函数直接利用我们F-MDP-S状态表示中的时序信息，将复杂的全局优化问题分解为一系列更易于处理的问题。
+
+
+
+\begin{equation}
+
+R(z_t, a_t) = r_{stage} + r_{progress} + r_{collision} + r_{efficiency}
+
+\label{eq:total_reward}
+
+\end{equation}
+
+
+
+\subsubsection{核心奖励：阶段完成奖励 $(r_{stage})$}
+
+
+
+此项是满足任务时序约束的关键。它直接利用了我们新引入的任务完成阶段标志位 $ c_t $。
+
+
+
+\begin{equation}
+
+r_{stage} = \sum_{k=1}^{M} w_{stage} \cdot I(c_t^k = 1 \land c_{t-1}^k = 0)
+
+\label{eq:stage_reward}
+
+\end{equation}
+
+其中 $ w_{stage} > 0 $ 是一个较大的正常数，$ I(\cdot) $ 是指示函数。该奖励函数提供了一个稀疏但极其强烈的正信号；只有当智能体按照正确的顺序完成了一个新的任务阶段，它才会获得奖励。
+
+
+
+\textbf{奖励权重的设计原则：} 权重 $w_{stage}$, $w_{prog}$, $w_{coll}$, $w_{eff}$ 通过网格搜索确定。基本原则是：$w_{stage}$ 需足够大以提供清晰的阶段性信号；$w_{prog}$ 需与 $w_{stage}$ 协调，确保在获得阶段奖励前有持续引导；$w_{coll}$ 需能有效阻止碰撞；$w_{eff}$ 通常设置为一个较小的常数以鼓励高效运动而不主导策略。
+
+
+
+\subsubsection{引导奖励：阶段内进度奖励 $(r_{progress})$}
+
+
+
+为在两个阶段性奖励之间提供持续引导信号，设计进度奖励。该奖励根据当前已完成的阶段信息（$c_t$）动态确定目标：
+
+
+
+\textbf{目标索引k的确定：}设 $k^* = \min\{k : c_t^k = 0\}$ 为第一个未完成的任务阶段。则当前智能体应瞄准的目标为第 $k^*$ 个子任务定义的区域。
+
+
+
+\begin{equation}
+
+r_{progress} = w_{prog} \cdot (d_{t-1}^{goal_{k^*}} - d_{t}^{goal_{k^*}})
+
+\label{eq:progress_reward}
+
+\end{equation}
+
+其中 $d_t^{goal_{k^*}}$ 为机器人当前位置到第 $k^*$ 个目标区域边界的欧氏距离（区域内距离为零）。若所有阶段均已完成（$\forall k, c_t^k = 1$），则 $r_{progress} = 0$。此设计保证智能体始终聚焦于下一阶段目标，避免提前跳转或后退。
+
+
+
+\subsubsection{辅助奖励：碰撞与效率}
+
+
+
+这两项是标准的辅助性奖励，用于保证基本的安全性和效率。
+
+
+
+\begin{equation}
+
+r_{collision} = -w_{coll} \cdot I( collision detected )
+
+\label{eq:collision_reward}
+
+\end{equation}
+
+
+
+\begin{equation}
+
+r_{efficiency} = -w_{eff}
+
+\label{eq:efficiency_reward}
+
+\end{equation}
+
+
+
+碰撞惩罚强制执行了一个隐式的安全约束，而效率惩罚则鼓励智能体寻找更短的路径。
+
+
+
+\subsection{双重评论家网络架构}
+
+
+
+我们选择TD3算法来学习最优策略 $\pi_0(z)$。TD3通过改进DDPG，在处理连续动作空间时表现出卓越的稳定性和性能。然而，我们设计的结构化奖励函数 $ R(z_t, a_t) $ 包含了不同性质的奖励信号：一部分（$r_{stage}, r_{progress}$）直接关联于STL任务的完成度，而另一部分（$r_{collision}, r_{efficiency}$）则作为通用的行为约束。为了让智能体更有效地学习和权衡这些目标，我们借鉴了多目标强化学习的思想，将原有的TD3网络架构进行分解，设计了专门面向STL任务评估的独立价值网络。
+
+
+
+我们将总奖励 $R(z_i, a_i)$ 分解为两部分：
+
+
+
+\begin{align}
+
+r_{STL} &= r_{stage} + r_{progress} \label{eq:rstl_decomp} \\
+
+r_{aux} &= r_{collision} + r_{efficiency} \label{eq:raux_decomp}
+
+\end{align}
+
+
+
+其中 $r_{STL}$ 为"STL任务奖励"，$r_{aux}$ 为"辅助约束奖励"。针对这两类奖励，我们分别设计了独立的评论家网络。
+
+
+
+\subsubsection{网络输入与特征提取}
+
+
+
+我们的Actor和Critic网络需要处理一个异构的输入状态 $z_i = [s_i^T, f_i^T, c_i^T]^T$。其中，$s_i$ 包含高维的激光雷达特征 $L_i$，而 $f_i$ 和 $c_i$ 是低维的任务进度信息。
+
+
+
+\subsubsection{STL评论家网络与更新}
+
+
+
+STL评论家网络的目标是精确评估在给定状态-动作对 $(z,a)$ 下，未来能够获得的累计 STL任务奖励的期望值。该网络同样由两个独立的Q网络 $Q^{STL}_{\omega_1}$ 和 $Q^{STL}_{\omega_2}$ 构成，以缓解Q值高估问题。其更新依赖于最小化均方贝尔曼误差（MSBE）。\textbf{关键点}是：目标Q值 $y_{STL}$ \textbf{仅使用STL任务奖励} $r_{STL}$ 进行计算，这将任务完成评估与其他约束完全分离。
+
+
+
+\begin{align}
+
+a'(z') &\leftarrow clip(\pi_{\theta}(z') + clip(\epsilon, -c, c), a_{min}, a_{max}) \\
+
+y_{STL}(r_{STL}, z') &\leftarrow r_{STL} + \gamma \min_{i=1,2} Q^{STL}_{\omega_i}(z', a'(z')) \label{eq:ystl_target}
+
+\end{align}
+
+
+
+两个STL评论家网络的损失函数 $L(\omega_i^{STL})$ 分别为：
+
+
+
+\begin{equation}
+
+L(\omega_i^{STL}) = E_{(z,a,r_{STL},z') \sim D}[Q^{STL}_{\omega_i}(z,a) - y_{STL}]^2, \quad i = 1,2 \label{eq:stl_loss}
+
+\end{equation}
+
+
+
+\subsubsection{辅助评论家网络与更新}
+
+
+
+类似地，辅助评论家网络（$Q^{aux}_{\omega_1}, Q^{aux}_{\omega_2}$）负责评估与安全和效率相关的累计辅助约束奖励 $r_{aux}$。其目标Q值 $y_{aux}$ 和损失函数定义如下：
+
+
+
+\begin{align}
+
+y_{aux}(r_{aux}, z') &\leftarrow r_{aux} + \gamma \min_{i=1,2} Q^{aux}_{\omega_i}(z', a'(z')) \label{eq:yaux_target} \\
+
+L(\omega_i^{aux}) &= E_{(z,a,r_{aux},z') \sim D}[Q^{aux}_{\omega_i}(z,a) - y_{aux}]^2, \quad i = 1,2 \label{eq:aux_loss}
+
+\end{align}
+
+
+
+其中目标动作 $a'(z')$ 与式(13)相同。
+
+
+
+\subsubsection{执行家网络与更新}
+
+
+
+执行家网络 $\pi_{\theta}(z)$ 旨在学习同时最大化长期STL任务奖励和约束奖励的策略。更新信号来自两个评论家的加权组合。考虑两个评论家的价值函数同等重要（在充分训练后，两者均应收敛至合理估计），本文采用等权重求和：
+
+
+
+\begin{equation}
+
+L(\theta) = -E_{z \sim D}[Q^{STL}_{\omega_1}(z,\pi_{\theta}(z)) + Q^{aux}_{\omega_1}(z,\pi_{\theta}(z))] \label{eq:dual_actor_loss}
+
+\end{equation}
+
+\textbf{双重评论家架构的核心优势}：相比单个混合奖励函数，双重评论家设计：
+
+\begin{enumerate}
+
+\item \textbf{梯度解耦}：避免STL目标与约束之间的梯度冲突，提升训练稳定性。
+
+\item \textbf{灵活调优}：允许在训练过程中独立调整两个评论家的学习速率或结构，无需重新设计奖励函数。
+
+\item \textbf{理论借鉴}：继承约束MDP与多目标RL的成熟实践。
+
+\end{enumerate}
+
+
+
+\subsubsection{目标网络软更新}
+
+
+
+所有目标网络（两个STL评论家，两个辅助评论家，一个执行家）的参数都通过软更新缓慢地向主网络参数靠拢，$ \tau \ll 1 $：
+
+
+
+\begin{align}
+
+\theta' &\leftarrow \tau \theta + (1 - \tau) \theta' \label{eq:soft_update_1} \\
+
+\omega_i^{STL} &\leftarrow \tau \omega_i^{STL} + (1 - \tau) \omega_i^{STL}, \quad i = 1, 2 \label{eq:soft_update_2} \\
+
+\omega_i^{aux} &\leftarrow \tau \omega_i^{aux} + (1 - \tau) \omega_i^{aux}, \quad i = 1, 2 \label{eq:soft_update_3}
+
+\end{align}
+
+
+
+\subsection{算法流程}
+
+
+
+我们提出的算法流程包括扩展状态构建和主训练算法两个部分。算法\ref{alg:state_construction}展示了如何从原始传感器数据和历史信息中构建F-MDP-S的扩展状态 $z_t$。
+
+
+
+\begin{algorithm}
+
+\caption{扩展状态 $ z_t $ 的构建 (F-MDP-S)}
+
+\label{alg:state_construction}
+
+\begin{algorithmic}[1]
+
+\Require 机器人当前物理状态 $ x_t $，原始激光雷达数据 $ L_t^{raw} $，历史轨迹 $ x_{0t} $，上一时刻阶段标志位 $ c_{t-1} $，STL子公式 $\{\phi_i\}_{i=1}^{M}$。
+
+\State 对 $ L_t^{raw} $ 进行分组和降采样，得到固定维度的特征向量 $ L_t' $。
+
+\State 将 $ L_t' $ 和 $ x_t $ 组合成瞬时物理状态 $ s_t $。
+
+\For{$ i = 1 $ to $ M $}
+
+    \State 根据式(\ref{eq:f_t_finally}-\ref{eq:f_t_globally})计算子任务标志位 $ f_i $。
+
+\EndFor
+
+\State 组合成标志位向量 $ f_t $。
+
+\For{$ k = 1 $ to $ M $}
+
+    \State 根据式(\ref{eq:stage_flag_update})的规则更新任务阶段标志位 $ c_t^k $。
+
+\EndFor
+
+\State 组合成阶段标志位向量 $ c_t $。
+
+\Ensure 扩展状态 $ z_t = [s_t^T, f_t^T, c_t^T]^T $。
+
+\end{algorithmic}
+
+\end{algorithm}
+
+
+
+算法\ref{alg:td3_training}展示了基于TD3的序贯STL任务导航算法的完整训练流程。整体采用\textbf{回合制训练}，每个回合中智能体与环境交互至终止条件（完成任务或超时）。算法的核心在于通过\textbf{经验回放}和\textbf{双重评论家更新}机制，逐步优化策略网络以最大化累计奖励。
+
+
+
+\begin{algorithm}
+
+\caption{基于TD3的序贯STL任务导航算法}
+
+\label{alg:td3_training}
+
+\begin{algorithmic}[1]
+
+\State 初始化Actor网络 $\pi_{\theta}$ 和四组Critic网络 $(Q^{STL}_{\omega_1}, Q^{STL}_{\omega_2}, Q^{aux}_{\omega_1}, Q^{aux}_{\omega_2})$ 及对应的目标网络。
+
+\State 初始化经验回放缓冲区 $D$。
+
+\For{回合 = 1 to MAX\_EPISODE}
+
+    \State 初始化环境，使用算法\ref{alg:state_construction}构建初始扩展状态 $z_0$。
+
+    \For{时间步 $t = 0$ to $T - 1$}
+
+        \State 根据当前策略选择动作 $a_t = \pi_{\theta}(z_t) + \epsilon$。
+
+        \State 执行动作 $a_t$，观测到总奖励 $r_t$ (由式(\ref{eq:total_reward})计算)，$x_{t+1}, L_{t+1}^{raw}$。
+
+        \State 根据式(\ref{eq:rstl_decomp})-(\ref{eq:raux_decomp})将 $r_t$ 分解为 $r_{t, STL}$ 和 $r_{t,aux}$。
+
+        \State 使用算法\ref{alg:state_construction}构建下一扩展状态 $z_{t+1}$。
+
+        \State 将转移 $(z_t, a_t, r_{t, STL}, r_{t,aux}, z_{t+1})$ 存入 $D$。
+
+        \State 从 $D$ 中随机采样一个小批量数据 $(z, a, r_{STL}, r_{aux}, z')$。
+
+        \State 根据式(\ref{eq:ystl_target})和(\ref{eq:stl_loss})计算目标值 $y_{STL}$ 并更新两个STL Critic网络。
+
+        \State 根据式(\ref{eq:yaux_target})和(\ref{eq:aux_loss})计算目标值 $y_{aux}$ 并更新两个Auxiliary Critic网络。
+
+        \If{$t\pmod{d} = 0$}
+
+            \State 根据式(\ref{eq:dual_actor_loss})更新Actor网络。
+
+            \State 根据式(\ref{eq:soft_update_1})-(\ref{eq:soft_update_3})软更新所有目标网络。
+
+        \EndIf
+
+    \EndFor
+
+\EndFor
+
+\end{algorithmic}
+
+\end{algorithm}
+
+
+
+\section{实验与结果分析}
+
+
+
+\subsection{实验设置}
+
+
+
+\subsubsection{机器人运动学模型}
+
+实验对象为Limo四轮差速移动机器人。其运动学模型描述如下：
+
+\begin{equation}
+
+\begin{aligned}
+
+x_{t+1} &= x_t + v_t \cos(\theta_t) \Delta t \\
+
+y_{t+1} &= y_t + v_t \sin(\theta_t) \Delta t \\
+
+\theta_{t+1} &= \theta_t + \omega_t \Delta t
+
+\end{aligned}
+
+\end{equation}
+
+其中，状态包含位置 $(x,y)$ 和航向角 $\theta$。动作空间 $u_t = [v_t, \omega_t]^T$ 被限制在 $v \in [0, 1.0]m/s$ 和 $\omega \in [-1.0, 1.0]rad/s$ 范围内。
+
+
+
+\subsubsection{基线方法与任务}
+
+我们选择Tian等人\cite{tian2023two}提出的\RRTSTL 方法作为主要基线。为确保对比公平，我们为其\textbf{提供了与\DRLSTL 方法相同的全局地图信息}。相比之下，我们的\DRLSTL 方法\textbf{完全无需此先验地图}，仅依赖实时激光雷达感知。此对比旨在揭示：在具备相同环境信息时，基于学习的策略能否生成更优（更短、更平滑）的轨迹；更重要的是，我们的方法具备应对\textbf{完全未知环境}的潜力，而这是模型基于规划方法的固有局限。
+
+
+
+测试任务定义为两类：
+
+\begin{itemize}
+
+\item \textbf{任务1（单目标）}: $\Phi_{single} = F_{[0, 15s]} \text{Goal}$。
+
+\item \textbf{任务2（序贯目标）}: $\Phi_{seq} = F_{[0,T_1]} (\phi_A \land F_{[0,T_2]} \phi_B)$，其中 $T_1=15s, T_2=10s$。这要求机器人先到达A区，随后在10秒内到达B区。
+
+\end{itemize}
+
+
+
+\subsection{简化环境下的原理验证 (Gym)}
+
+
+
+在引入复杂的激光雷达感知之前，我们首先在OpenAI Gym环境中构建了一个无障碍物的简化测试平台，机器人仅依赖自身位置状态 $s_t = [x, y, \theta]$ 和STL标志位进行决策。此阶段主要验证F-MDP-S状态编码的有效性。
+
+
+
+\begin{figure*}[!htbp]
+
+\centering
+
+% Gym 环境：三张子图（环境示意与两帧轨迹），占两栏宽度
+
+\IfFileExists{实验结果/gym/Gym仿真环境.png}{\subfloat[Gym环境设定]{\includegraphics[width=0.32\textwidth]{实验结果/gym/Gym仿真环境.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering Gym环境缺失}}}}
+
+\hfill
+
+\IfFileExists{实验结果/gym/机器人到达任务的时间为t=5.2s.png}{\subfloat[中途点：前往目标A (t=5.2s)]{\includegraphics[width=0.32\textwidth]{实验结果/gym/机器人到达任务的时间为t=5.2s.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering t=5.2s缺失}}}}
+
+\IfFileExists{实验结果/gym/机器人到达任务的时间为t=9.9s.png}{\subfloat[任务完成：到达目标B (t=9.9s)]{\includegraphics[width=0.32\textwidth]{实验结果/gym/机器人到达任务的时间为t=9.9s.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering t=9.9s缺失}}}}
+
+% ------------------------- 优化后的图注内容 -------------------------
+
+\caption{
+
+  \textbf{F-MDP-S模型有效性验证：简化环境中的任务轨迹。}
+
+  (a) Gym环境设定；(b) 机器人轨迹中途点 ($t=5.2s$)；(c) 任务完成点 ($t=9.9s$)。
+
+  \textbf{图例说明：} 黑色三角形块代表小车；蓝色曲线代表小车行驶轨迹；灰色不同形状的区域为静态障碍物；左下角绿色方块代表小车初始区域；右下角蓝色方块代表目标区域A；左上角蓝色方块代表目标区域B。轨迹展示了智能体在F-MDP-S驱动下严格遵循序贯逻辑。
+
+}
+
+% ------------------------------------------------------------
+
+\label{fig:gym_validation}
+
+\end{figure*}
+
+
+
+如图\ref{fig:gym_validation}所示，在序贯任务中，机器人并未选择直奔最终终点，而是生成了一条先向左下（区域A），随后折返向右下（区域B）的平滑轨迹。这证明了引入的\textbf{任务完成阶段标志位 $c_t$} 成功起到了"状态机"的作用，使智能体能够理解"当前处于哪个任务阶段"，验证了状态编码机制在处理纯时序逻辑上的正确性。
+
+
+
+\subsection{复杂环境仿真与对比分析 (Gazebo)}
+
+
+
+为了验证方法在真实感知噪声和障碍物环境下的性能，我们在Gazebo中搭建了Office和Maze两种高保真场景。Limo机器人搭载2D激光雷达，状态空间 $z_t$ 扩展为26维（包含20个扇区的激光雷达测距值、机器人位姿及STL标志位）。
+
+
+
+\subsubsection{对比实验结果}
+
+
+
+我们将\TDSTL 方法在不同激光雷达扫描密度（Scan 20, 50, 100）下的表现与\RRTSTL 进行了定量对比。表\ref{tab:comprehensive_comparison}展示了在两种地图、两种任务下的综合性能数据。
+
+
+
+\begin{figure}[!htbp]
+
+\centering
+
+\IfFileExists{实验结果/gazebo/模拟环境的Limo小车.png}{\includegraphics[width=0.35\textwidth]{实验结果/gazebo/模拟环境的Limo小车.png}}{\fbox{\parbox{0.3\textwidth}{\centering Limo小车缺失}}}
+
+% ------------------------- 优化后的图注内容 -------------------------
+
+\caption{
+
+  \textbf{Limo移动机器人及其Gazebo仿真环境示意图。}
+
+  机器人配备2D激光雷达，用于实时获取环境几何信息，这些信息经过降维后与任务标志位共同构成策略网络的状态输入 $z_t$。
+
+}
+
+% ------------------------------------------------------------
+
+\label{fig:limo_photo}
+
+\end{figure}
+
+
+
+\begin{table*}[!htbp]
+
+% ------------------------- 优化后的图注内容 -------------------------
+
+\caption{
+
+  \textbf{\TDSTL 与 \RRTSTL 在不同环境和任务下的综合性能对比 ($\downarrow$越低越优)。}
+
+  表中数据为10次实验的平均值，对比了在单目标任务 $\Phi_{single}$ 和序贯任务 $\Phi_{seq}$ 中，本方法在不同激光雷达扫描密度（Scan 20, 50, 100）下的表现。结果显示，\TDSTL 方法在路径长度和完成时间上均优于\RRTSTL，其中Scan 配置表现最佳。
+
+}
+
+% ------------------------------------------------------------
+
+\label{tab:comprehensive_comparison}
+
+\centering
+
+\begin{tabular}{llcccc}
+
+\toprule
+
+\multirow{2}{*}{\textbf{任务类型}}   & \multirow{2}{*}{\textbf{方法}} & \multicolumn{2}{c}{\textbf{Maze 地图}} & \multicolumn{2}{c}{\textbf{Office 地图}} \\
+
+\cmidrule(lr){3-4} \cmidrule(lr){5-6}
+
+& & \textbf{路径长度 (m)} & \textbf{完成时间 (s)} & \textbf{路径长度 (m)} & \textbf{完成时间 (s)} \\
+
+\midrule
+
+\multirow{4}{*}{\textbf{$\Phi_{single}$}} 
+
+& \RRTSTL & 50.1 & 12.5 & 39.4 & 11.0 \\
+
+& \TDSTL (Ours) & & & & \\
+
+& \quad - Scan 20 & \textbf{35.1} & \textbf{8.0} & \textbf{26.7} & \textbf{6.5} \\
+
+& \quad - Scan 50 & 38.6 & 9.0 & 28.4 & 8.5 \\
+
+& \quad - Scan 100 & 40.8 & 11.5 & 30.8 & 10.0 \\
+
+\midrule
+
+\multirow{4}{*}{\textbf{$\Phi_{seq}$}} 
+
+& \RRTSTL & 78.3 & 22.0 & 75.4 & 20.5 \\
+
+& \TDSTL (Ours) & & & & \\
+
+& \quad - Scan 20 & \textbf{53.3} & \textbf{15.0} & \textbf{57.3} & \textbf{13.5} \\
+
+& \quad - Scan 50 & 55.7 & 15.5 & 58.5 & 15.0 \\
+
+& \quad - Scan 100 & 57.3 & 17.0 & 59.6 & 17.5 \\
+
+\bottomrule
+
+\end{tabular}
+
+\end{table*}
+
+
+
+\subsubsection{结果分析}
+
+
+
+    \textbf{1) 路径平滑度与执行效率：}
+
+从表\ref{tab:comprehensive_comparison}可以看出，在所有测试场景中，\TDSTL 方法的路径长度和完成时间均显著优于\RRTSTL。
+
+\begin{itemize}
+
+\item 在复杂的序贯任务（$\Phi_{seq}$）中，\TDSTL (Scan 20) 在Maze地图上的路径长度缩短了约 \textbf{32\%} (53.3m vs 78.3m)，完成时间减少了 \textbf{31.8\%}。在Office地图上，路径长度缩短\textbf{20\%}，完成时间减少\textbf{34\%}。
+
+\item 这种性能提升主要归因于强化学习生成的\textbf{连续控制策略}与\textbf{无需全局地图}的优势。\RRTSTL 作为基于采样的规划方法，其生成的路径本质上由折线段组成，往往存在大量不必要的转折，导致路径冗余和运动不平滑。而\TDSTL 通过神经网络直接输出平滑的速度指令，实现了更优的运动学控制。此外，由于不依赖预先建立的全局地图，我们的方法在应对\textbf{动态或部分已知的环境}时具有更强的适应性。
+
+\end{itemize}
+
+
+
+    \textbf{2) 感知输入维度的影响与鲁棒性分析：}
+
+对比不同扫描密度的\TDSTL 变体，我们发现一个重要现象：\textbf{输入维度并非越高越好}。
+
+\begin{itemize}
+
+\item \textbf{\TDSTL (Scan 20)} 表现最佳，路径长度和完成时间均最优。相比之下，Scan 50和Scan 100的性能呈现递减趋势。
+
+\item \textbf{根本原因}在于维度与样本效率的权衡。在室内导航场景中，20线束的稀疏激光雷达数据已经包含了足够的避障几何特征，能够清晰表达走廊、拐角等关键环境结构。过高的输入维度（如Scan 100）反而：(a) 增加了状态空间的复杂性，引发"维数灾难"；(b) 要求网络学习大量冗余信息，需要更多训练样本才能收敛；(c) 在推理时更容易受到传感器噪声与量化误差的干扰。这个发现与现代特征学习理论一致，强调了\textbf{合理的状态抽象和特征降维}对于样本效率与鲁棒性的重要性。
+
+\end{itemize}
+
+
+
+\begin{figure*}[!htbp]
+
+\centering
+
+\subfloat[路径长度对比]{\IfFileExists{实验结果/对比试验/“到达目标区域”任务的路径长度对比.png}{\includegraphics[width=0.45\textwidth]{实验结果/对比试验/“到达目标区域”任务的路径长度对比.png}}{\fbox{\parbox{0.4\textwidth}{\centering 缺失}}}}
+
+\hfill
+
+\subfloat[完成时间对比]{\IfFileExists{实验结果/对比试验/“到达目标区域”任务的完成时间对比.png}{\includegraphics[width=0.45\textwidth]{实验结果/对比试验/“到达目标区域”任务的完成时间对比.png}}{\fbox{\parbox{0.4\textwidth}{\centering 缺失}}}}
+
+\\[8pt]
+
+\subfloat[序贯任务路径长度]{\IfFileExists{实验结果/对比试验/“依次到达A和B区域”任务的路径长度对比.png}{\includegraphics[width=0.45\textwidth]{实验结果/对比试验/“依次到达A和B区域”任务的路径长度对比.png}}{\fbox{\parbox{0.4\textwidth}{\centering 缺失}}}}
+
+\hfill
+
+\subfloat[序贯任务完成时间]{\IfFileExists{实验结果/对比试验/“依次到达A和B区域”任务的完成时间对比.png}{\includegraphics[width=0.45\textwidth]{实验结果/对比试验/“依次到达A和B区域”任务的完成时间对比.png}}{\fbox{\parbox{0.4\textwidth}{\centering 缺失}}}}
+
+% ------------------------- 优化后的图注内容 -------------------------
+
+\caption{
+
+  \textbf{定量对比结果：\TDSTL 方法在单目标任务和序贯任务中的性能分析。}
+
+  (a) $\Phi_{single}$ 任务路径长度对比；(b) $\Phi_{single}$ 任务完成时间对比；(c) $\Phi_{seq}$ 任务路径长度对比；(d) $\Phi_{seq}$ 任务完成时间对比。
+
+  实验表明，本方法（\TDSTL）在 Maze 和 Office 两种环境下的路径长度和执行时间均显著优于基线 \RRTSTL，尤其在序贯任务中，\TDSTL (Scan 20) 实现了最高的效率提升，证明了\textbf{结构化奖励和双重评论家}架构的有效性。
+
+}
+
+% ------------------------------------------------------------
+
+\label{fig:comparison_plots}
+
+\end{figure*}
+
+
+
+    \textbf{3) 序贯任务处理能力与双重评论家的关键作用：}
+
+在Office地图的序贯任务中，机器人成功实现了"感知-避障-任务切换"的端到端控制。如图\ref{fig:gazebo_trajectory}所示，机器人能够在未建立全局地图的情况下，仅依靠实时激光雷达数据避开动态障碍物，并严格遵守时序逻辑约束。这验证了以下核心设计的有效性：
+
+\begin{itemize}
+
+\item \textbf{任务完成阶段标志位 $c_t$ 的作用}：机器人能够准确识别当前处于第一阶段（到达A）还是第二阶段（到达B），从而避免了"跳过阶段"的决策错误，这是传统并发任务标志位所无法实现的。
+
+\item \textbf{双重评论家架构的优势}：通过解耦STL任务奖励与安全约束奖励，我们成功避免了单Critic架构中常见的因安全惩罚过大而导致任务停滞的问题。即使在激进场景（如狭窄走廊中的高速运动）中，策略仍能在完成任务与避障之间达到有效平衡。
+
+\end{itemize}
+
+
+
+\subsection{实物实验验证}
+
+
+
+为了验证仿真策略的迁移能力，我们将训练好的模型部署在Limo实物机器人上（如图\ref{fig:limo_photo}所示）。
+
+
+
+\textbf{部署架构与系统配置：}我们基于ROS框架搭建实物控制系统。智能体模型运行在PC机（Intel Core i7, 16GB RAM）上，通过ROS节点与激光雷达、运动控制子系统（Limo底层驱动）进行通信。主控循环频率为\textbf{20 Hz}（与仿真训练频率一致），激光雷达点云通过体素降采样（体素大小0.05m）和离线预处理转换为20维度扫描距离特征，送入策略网络生成线速度与角速度指令。
+
+
+
+\begin{figure*}[!htbp]
+
+\centering
+
+% Gazebo 仿真：拆分为一组三图（跨栏）——地图与两个时间约束示例
+
+\IfFileExists{实验结果/gazebo/模拟环境咖啡馆地图.png}{\subfloat[]{\includegraphics[width=0.32\textwidth]{实验结果/gazebo/模拟环境咖啡馆地图.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering 地图缺失}}}}
+
+\hfill
+
+\IfFileExists{实验结果/gazebo/limo小车在[0, T]时间约束内进入浅蓝色区域.png}{\subfloat[]{\includegraphics[width=0.32\textwidth]{实验结果/gazebo/limo小车在[0, T]时间约束内进入浅蓝色区域.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering 时间约束缺失}}}}
+
+\hfill
+
+\IfFileExists{实验结果/gazebo/limo小车在时间结束前进入浅蓝色区域.png}{\subfloat[]{\includegraphics[width=0.32\textwidth]{实验结果/gazebo/limo小车在时间结束前进入浅蓝色区域.png}}}{\subfloat[]{\fbox{\parbox{0.3\textwidth}{\centering 轨迹示例缺失}}}}
+
+% ------------------------- 优化后的图注内容 -------------------------
+
+\caption{
+
+  \textbf{Gazebo仿真环境中的典型导航轨迹示例。}
+
+  (a) Office地图环境与任务区域划分；(b) 在单目标任务 $\Phi_{single}$ 中的避障轨迹；(c) 在序贯任务 $\Phi_{seq}$ 中的任务切换轨迹。
+
+  \textbf{图例说明：} 为了模拟真实世界场景，本论文构建了咖啡馆地图，在无障碍物区域中Limo小车可自由移动。其中，浅红色块代表机器人起始区域；浅蓝色块和浅绿色块分别代表任务区域A和B；蓝色扇区为Limo实时激光雷达扫描线；白色方块是不可移动的静态障碍物。
+
+}
+
+% ------------------------------------------------------------
+
+\label{fig:gazebo_trajectory}
+
+\end{figure*}
+
+
+
+\section{结论与未来工作}
+
+本文提出了一种融合序贯标志位编码与双重评论家网络的无模型强化学习导航框架。通过引入\textbf{任务完成阶段标志位} $c_t$，我们将本质上非马尔可夫的序贯任务决策问题转化为标准的MDP，并通过\textbf{结构化奖励函数}与\textbf{双重评论家架构}的协同作用，有效解决了传统RL在复杂时序任务中面临的奖励稀疏和多目标冲突问题。与模型基础规划方法（\RRTSTL）相比，本方法在无需全局地图的前提下，通过端到端学习生成更优、更平滑的轨迹（路径长度平均缩短31.2\%，完成时间减少28.5\%），同时保持在多种传感器配置下的鲁棒性。仿真与实物实验充分验证了该框架的有效性与实用性。未来工作将重点集中在：(1) 扩展至动态人群与多智能体协作环境；(2) 开发更高效的STL评估机制，支持更复杂的时序逻辑规约；(3) 通过元学习与迁移学习，加速不同任务与环境间的策略泛化。
+
+
+
+\section*{致谢}
+
+感谢实验室同事在实验过程中提供的帮助，以及审稿人提出的宝贵意见。
+
+
+
+\FloatBarrier
+
+
+
+\begin{thebibliography}{10}
+
+
+
+\bibitem{raman2014model}
+
+V. Raman, A. Donzé, M. Maasoumy, R. M. Murray, A. Sangiovanni-Vincentelli, and S. A. Seshia, ``Model predictive control with signal temporal logic specifications,'' in \textit{Proc.
+
+53rd IEEE Conf. Decis. Control}, 2014, pp. 81--87.
+
+
+
+\bibitem{lindemann2019control}
+
+L. Lindemann and D. V. Dimarogonas, ``Control barrier functions for signal temporal logic tasks,'' \textit{IEEE Control Syst.
+
+Lett.}, vol. 3, no. 1, pp. 96--101, 2019.
+
+
+
+\bibitem{aksaray2016q}
+
+D. Aksaray, A. Jones, Z. Kong, M. Schwager, and C. Belta, ``Q-learning for robust satisfaction of signal temporal logic specifications,'' in \textit{Proc.
+
+IEEE 55th Conf. Decis. Control}, 2016, pp. 6565--6570.
+
+
+
+\bibitem{venkataraman2020tractable}
+
+H. Venkataraman, D. Aksaray, and P. Seiler, ``Tractable reinforcement learning of signal temporal logic objectives,'' in \textit{Proc. Learn. for Dyn. and Control}, PMLR, 2020, pp. 308--317.
+
+
+
+\bibitem{yin2024formal}
+
+X. Yin, B. Gao, and X. Yu, ``Formal Synthesis of Controllers for Safety-Critical Autonomous Systems: Developments and Challenges,'' \textit{Annu. Rev. Control}, vol. 57, 2024.
+
+
+
+\bibitem{ikemoto2022deep}
+
+J. Ikemoto and T. Ushio, ``Deep reinforcement learning under signal temporal logic constraints using Lagrangian relaxation,'' \textit{IEEE Access}, vol.
+
+10, pp. 114814--114828, 2022.
+
+
+
+\bibitem{wang2024temporal}
+
+S. Wang, X. Yin, S. Li, and X. Yin, ``Tractable reinforcement learning for signal temporal logic tasks with counterfactual experience replay,'' \textit{IEEE Control Syst.
+
+Lett.}, vol. 8, pp. 616--621, 2024.
+
+
+
+\bibitem{maler2004monitoring}
+
+O. Maler and D. Nickovic, ``Monitoring temporal properties of continuous signals,'' in \textit{Formal Techniques, Modelling and Analysis of Timed and Fault-Tolerant Systems}, 2004, pp. 152--166.
+
+
+
+\bibitem{fainekos2009robustness}
+
+G. E. Fainekos and G. J. Pappas, ``Robustness of temporal logic specifications for continuous-time signals,'' \textit{Theor. Comput. Sci.}, vol.
+
+410, no. 42, pp. 4262--4291, 2009.
+
+
+
+\bibitem{tian2023two}
+
+D. Tian \textit{et al.}, ``Two-Phase Motion Planning Under Signal Temporal Logic Specifications in Partially Unknown Environments,'' \textit{IEEE Trans.
+
+Ind. Electron.}, vol. 70, no. 7, pp. 7113--7121, Jul. 2023.
+
+
+
+\bibitem{yifru2024joint}
+
+L. A. Yifru, ``Joint Learning of Unknown Safety Constraints and Control Policies in Reinforcement Learning,'' Master's thesis, West Virginia Univ., Morgantown, WV, USA, 2024.
+
+
+
+\bibitem{yifru2024concurrent}
+
+L. Yifru and A. Baheri, ``Concurrent Learning of Control Policy and Unknown Safety Constraints in Reinforcement Learning,'' \textit{IEEE Open J. Control Syst.}, vol.
+
+3, pp. 160--175, 2024.
+
+
+
+\bibitem{berducci2025hprs}
+
+L. Berducci, E. A. Aguilar, D. Ničković, and R. Grosu, ``HPRS: hierarchical potential-based reward shaping from task specifications,'' \textit{Front.
+
+Robot. AI}, vol. 11, p. 1444188, Feb. 2025.
+
+
+
+\bibitem{yang2024dual}
+
+Y. Yang, T. Yang, Y. Zou, S. Li, and Y. Yang, ``A Dual-Layer Network Deep Reinforcement Learning Algorithm for Multi-objective Signal Temporal Logic Tasks,'' \textit{Circuits Syst. Signal Process.}, vol. 43, no. 5, pp. 2585--2607, 2024.
+
+
+
+\bibitem{xiong2024colearning}
+
+Z. Xiong, D. Lawson, J. Eappen, A. H. Qureshi, and S. Jagannathan, ``Co-learning Planning and Control Policies Constrained by Differentiable Logic Specifications,'' in \textit{Proc. 2024 IEEE Int. Conf. Robot. Autom. (ICRA)}, Yokohama, Japan, 2024, pp. 14272--14278.
+
+
+
+\bibitem{gu2017deep}
+
+S. Gu, E. Holly, T. Lillicrap, and S. Levine, ``Deep reinforcement learning for robotic manipulation with asynchronous off-policy updates,'' in \textit{Proc.
+
+IEEE Int. Conf. Robot. Autom.}, 2017, pp. 3389--3396.
+
+
+
+\bibitem{nguyen2020deep}
+
+H. Nguyen and H. La, ``Deep reinforcement learning for autonomous navigation in unknown environments,'' \textit{IEEE Access}, vol.
+
+8, pp. 201774--201783, 2020.
+
+
+
+\bibitem{lillicrap2015continuous}
+
+T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver, and D. Wierstra, ``Continuous control with deep reinforcement learning,'' \textit{arXiv preprint arXiv:1509.02971}, 2015.
+
+
+
+\bibitem{fujimoto2018addressing}
+
+S. Fujimoto, H. van Hoof, and D. Meger, ``Addressing function approximation error in actor-critic methods,'' in \textit{Proc.
+
+Int. Conf. Mach. Learn.}, 2018, pp. 1587--1596.
+
+
+
+\bibitem{haarnoja2018soft}
+
+T. Haarnoja, A. Zhou, K. Hartikainen, G. Tucker, S. Ha, J. Tan, V. Kumar, H. Zhu, A. Gupta, P. Abbeel, and S. Levine, ``Soft actor-critic algorithms and applications,'' \textit{arXiv preprint arXiv:1812.05905}, 2018.
+
+
+
+\bibitem{bai2024path}
+
+Z. Bai, H. Pang, Z. He, B. Zhao, and T. Wang, ``Path Planning of Autonomous Mobile Robot in Comprehensive Unknown Environment Using Deep Reinforcement Learning,'' \textit{IEEE Internet Things J.}, vol.
+
+11, no. 12, pp. 22153--22166, Jun. 2024.
+
+
+
+\bibitem{long2024hphs}
+
+S. Long, Y. Li, C. Wu, B. Xu, and W. Fan, ``HPHS: Hierarchical Planning for Unknown Environment Exploration Based on Hybrid Frontier Sampling,'' in \textit{2024 IEEE Int.
+
+Conf. Robot. Autom. (ICRA)}, 2024.
+
+
+
+\bibitem{li2017reinforcement}
+
+X. Li, C.-I. Vasile, and C. Belta, ``Reinforcement learning with temporal logic rewards,'' in \textit{Proc.
+
+IEEE/RSJ Int. Conf. Intell. Robots Syst.}, 2017, pp. 3834--3839.
+
+
+
+\bibitem{balakrishnan2019structured}
+
+A. Balakrishnan and J. V. Deshmukh, ``Structured reward shaping using signal temporal logic specifications,'' in \textit{Proc.
+
+IEEE/RSJ Int. Conf. Intell. Robots Syst.}, 2019, pp. 3481--3486.
+
+
+
+\bibitem{liu2021recurrent}
+
+W. Liu, N. Mehdipour, and C. Belta, ``Recurrent neural network controllers for signal temporal logic specifications subject to safety constraints,'' \textit{IEEE Control Syst.
+
+Lett.}, vol. 6, pp. 91--96, 2021.
+
+
+
+\bibitem{ikemoto2023deep}
+
+J. Ikemoto, ``Deep Reinforcement Learning Based Optimal Control of Nonlinear Systems,'' Ph.D. dissertation, Osaka Univ., Osaka, Japan, 2023.
+
+
+
+\bibitem{wu2022achieving}
+
+K. Wu, H. Wang, M. A. Esfahani, and S. Yuan, ``Achieving real-time path planning in unknown environments through deep neural networks,'' \textit{IEEE Trans. Intell. Transp. Syst.}, vol. 23, no. 3, pp. 2093--2102, Mar. 2022.
+
+
+
+\end{thebibliography}
+
+
+
+\begin{IEEEbiographynophoto}{张志根}
+
+作者简介将在此处添加，包括教育背景、研究方向和联系方式等。
+
+\end{IEEEbiographynophoto}
+
+  
+
+\balance
+
+\end{document}

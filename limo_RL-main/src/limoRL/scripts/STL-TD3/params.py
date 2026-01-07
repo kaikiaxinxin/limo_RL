@@ -6,43 +6,54 @@ CURR_PATH = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(CURR_PATH, "models")
 LOG_DIR = os.path.join(CURR_PATH, "logs")
 
-# === 任务区域 (Paper A: 序贯目标) ===
-# 区域 A (必须先到达)
-GOAL_A_POS = [6.0, -6.0]
-# 区域 B (到达A后去这里)
-GOAL_B_POS = [3.0, 9.0]
-# 初始区域 (加入随机噪声后的中心)
-INIT_POS = [-2.0, 0.0]
-# 判定半径
-AREA_RADIUS = 0.5
+# === [核心] 泛化任务配置 ===
+# 定义序贯任务列表 (按执行顺序排列)
+# type: 'F' (Finally/Reach), 'G' (Global/Stay - 预留接口)
+# pos: [x, y]
+# radius: 判定半径
+# time: 时间窗口 (秒)
+TASK_CONFIG = [
+    {'type': 'F', 'pos': [6.0, -6.0], 'radius': 0.5, 'time': 15.0}, # 任务 0
+    {'type': 'F', 'pos': [3.0, 9.0],  'radius': 0.5, 'time': 10.0}, # 任务 1
+    # {'type': 'F', 'pos': [0.0, 0.0],  'radius': 0.5, 'time': 10.0}, # 示例: 扩展任务 2
+]
 
+NUM_TASKS = len(TASK_CONFIG)
+DT = 0.1  # 控制周期 0.1s
+
+INIT_POS = [-7.0, 0.0]  # 修改: -2.0 -> -7.0
 # === 状态空间 ===
 LIDAR_DIM = 20            
-ROBOT_STATE_DIM = 4       
-FLAG_DIM = 4              
+ROBOT_STATE_DIM = 6       # [x, y, cos, sin, v, w]
+
+# [自动计算] 标志位维度 = 任务数 * 2 (每个任务有 1个c_t 和 1个f_t)
+FLAG_DIM = NUM_TASKS * 2              
 STATE_DIM = LIDAR_DIM + ROBOT_STATE_DIM + FLAG_DIM
 
 # === 动作空间 ===
+# 分别定义线速度和角速度限制
+MAX_V = 0.8  # m/s
+MAX_W = 1.5  # rad/s (适当增大转弯能力)
 ACTION_DIM = 2
-MAX_ACTION = 0.8          
-
 # === 训练超参数 ===
-MAX_STEPS = 1000           # 单回合最大步数
+MAX_STEPS = 1000          
 TOTAL_STEPS = 400000      
-BATCH_SIZE = 512
+BATCH_SIZE = 2048         
 GAMMA = 0.99
 TAU = 0.005
 LR_ACTOR = 3e-4
 LR_CRITIC = 3e-4
-START_STEPS = 5000       
+START_STEPS = 5000        
 POLICY_FREQ = 2
 EVAL_INTERVAL = 5000      
 EVAL_EPISODES = 5         
+UPDATE_ITERATION =20     
+ACTION_REPEAT = 3         
 
 # === 奖励权重 ===
-W_STAGE = 40.0       # 适当提高阶段奖励，鼓励完成任务
-W_PROG = 2.0         # 稍微降低进度权重，防止它为了赶路而忽略安全
-W_COLL = 100.0        # 大幅提高碰撞惩罚 (建议 50.0 或 100.0)
-W_EFF = 0.05         # 稍微增加一点时间惩罚，鼓励快速到达
+W_STAGE = 40.0       
+W_PROG = 10.0         
+W_COLL = 50.0        
+W_EFF = 0.05         
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

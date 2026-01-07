@@ -22,3 +22,11 @@ git add .
 git commit -m "xx"
 git push
 
+上传新的代码仓库：
+git init
+git add .
+git commit -m "第一次提交代码"
+git branch -M main
+
+git remote add origin https://github.com/你的用户名/你的仓库名.git
+git push -u origin main
