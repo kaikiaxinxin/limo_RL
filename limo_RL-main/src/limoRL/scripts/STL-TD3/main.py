@@ -7,7 +7,7 @@ import sys
 # 导入自定义模块
 import params
 from stl_env import STL_Gazebo_Env
-from agent import TD3_Dual_Critic  # 确保 agent.py 里类名一致
+from agent import TD3_Dual_Critic
 from buffer import ReplayBuffer     
 from trainer import Trainer
 from utils import OU_Noise
@@ -45,7 +45,7 @@ def main():
     # === 2. 命令行参数 (支持断点续训) ===
     parser = argparse.ArgumentParser(description="TD3 STL Navigation")
     parser.add_argument("--seed", default=0, type=int, help="Random seed")
-    parser.add_argument("--load_model", default="", type=str, help="Model step to load (e.g. '10000' or 'best_5000')")
+    parser.add_argument("--load_model", default="", type=str, help="Model name to load (e.g. 'td3_15000')")
     args = parser.parse_args()
 
     # 设置随机种子
@@ -67,25 +67,47 @@ def main():
     env = STL_Gazebo_Env()
     
     # 智能体
-    # 注意：agent 内部会自动读取 params.STATE_DIM，所以这里不需要传参，或者根据您的 agent __init__ 修改
     agent = TD3_Dual_Critic() 
     
+    # [新增] 起始步数变量
+    start_step = 0
+
     # 如果指定了加载模型
     if args.load_model:
         model_path = os.path.join(params.MODEL_DIR, args.load_model)
         print(f"🔄 Loading checkpoint from: {model_path} ...")
-        # 需要在 agent.py 中实现 load 函数，或者手动加载
+        
         try:
-            agent.load(model_path) # 假设您在 agent.py 里写了 load 方法
+            agent.load(model_path)
             print("✅ Model loaded successfully!")
+            
+            # [新增] 智能解析步数
+            try:
+                # 尝试从文件名 "td3_15000" 中提取 "15000"
+                # 如果是 "best_model_5000"，也能提取出 "5000"
+                if "best_model" in args.load_model:
+                     # 最佳模型通常用于评估或微调，我们假设它已经过了随机阶段
+                     # 这里给一个大于 START_STEPS 的值，或者解析后缀
+                     parsed_step = int(args.load_model.split('_')[-1])
+                     start_step = max(parsed_step, params.START_STEPS + 1)
+                else:
+                    # 标准 checkpoint
+                    start_step = int(args.load_model.split('_')[-1])
+                
+                print(f"⏱️  Resuming training from step: {start_step}")
+                
+            except Exception as parse_err:
+                print(f"⚠️  Could not parse step from filename ({parse_err}).")
+                print(f"   -> Defaulting to params.START_STEPS + 1 ({params.START_STEPS + 1}) to skip random phase.")
+                start_step = params.START_STEPS + 1
+                
         except Exception as e:
             print(f"⚠️  Failed to load model: {e}")
             print("   -> Starting from scratch.")
 
     # 经验回放池 
-    # [修正] 根据您提供的 buffer.py，类名是 ReplayBuffer，且需要传参
     buffer = ReplayBuffer(
-        max_size=int(params.TOTAL_STEPS), # 或者设个固定大值如 1e6
+        max_size=int(params.TOTAL_STEPS), 
         state_dim=params.STATE_DIM,
         action_dim=params.ACTION_DIM,
         batch_size=params.BATCH_SIZE
@@ -99,11 +121,11 @@ def main():
     trainer = Trainer(env, agent, buffer, noise)
     
     try:
-        trainer.train()
+        # [修改] 将 start_step 传入 train 函数
+        trainer.train(start_step=start_step)
     except KeyboardInterrupt:
         print("\n🛑 Training interrupted by user.")
     finally:
-        # 这里可以加一些清理工作，比如保存当前未保存的模型
         print("👋 Exiting.")
 
 if __name__ == "__main__":

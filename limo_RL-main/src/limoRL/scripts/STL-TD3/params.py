@@ -13,8 +13,8 @@ LOG_DIR = os.path.join(CURR_PATH, "logs")
 # radius: 判定半径
 # time: 时间窗口 (秒)
 TASK_CONFIG = [
-    {'type': 'F', 'pos': [6.0, -6.0], 'radius': 0.5, 'time': 15.0}, # 任务 0
-    {'type': 'F', 'pos': [3.0, 9.0],  'radius': 0.5, 'time': 10.0}, # 任务 1
+    {'type': 'F', 'pos': [6.0, -6.0], 'radius': 1.5, 'time': 15.0}, # 任务 0
+    {'type': 'F', 'pos': [3.0, 9.0],  'radius': 1.5, 'time': 10.0}, # 任务 1
     # {'type': 'F', 'pos': [0.0, 0.0],  'radius': 0.5, 'time': 10.0}, # 示例: 扩展任务 2
 ]
 
@@ -26,7 +26,7 @@ INIT_POS = [-7.0, 0.0]
 LIDAR_DIM = 20            
 ROBOT_STATE_DIM = 6       # [x, y, cos, sin, v, w]
 
-# [自动计算] 标志位维度 = 任务数 * 2 (每个任务有 1个c_t 和 1个f_t)
+#标志位维度 = 任务数 * 2 (每个任务有 1个c_t 和 1个f_t)
 FLAG_DIM = NUM_TASKS * 2              
 STATE_DIM = LIDAR_DIM + ROBOT_STATE_DIM + FLAG_DIM
 
@@ -48,12 +48,14 @@ POLICY_FREQ = 2
 EVAL_INTERVAL = 10000      
 EVAL_EPISODES = 5         
 UPDATE_ITERATION =1     
-ACTION_REPEAT = 3         
+ACTION_REPEAT = 2         
 
 # === 奖励权重 ===
+# 在 # === 奖励权重 === 部分增加一行
 W_STAGE = 40.0       
 W_PROG = 10.0         
 W_COLL = 50.0        
-W_EFF = 0.05         
+W_EFF = 0.08         
+W_MOVE = 0.2  
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

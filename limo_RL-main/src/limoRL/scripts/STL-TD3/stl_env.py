@@ -9,7 +9,9 @@ from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import ModelStates # [新增] 真值消息
 from std_srvs.srv import Empty
 import params
-
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
+from tf.transformations import quaternion_from_euler
 class STL_Gazebo_Env:
     def __init__(self):
         try:
@@ -93,9 +95,9 @@ class STL_Gazebo_Env:
         if self.latest_scan_msg is None: return False
         try:
             raw = np.array(self.latest_scan_msg.ranges)
-            raw[np.isinf(raw)] = 7.0
-            raw[np.isnan(raw)] = 0.0
-            raw = np.clip(raw, 0.0, 7.0)
+            raw[np.isinf(raw)] = 5.0
+            raw[np.isnan(raw)] = 5.0
+            raw = np.clip(raw, 0.0, 5.0)
             
             chunk = len(raw) // params.LIDAR_DIM
             scan = []
@@ -111,29 +113,71 @@ class STL_Gazebo_Env:
         return np.array(params.TASK_CONFIG[idx]['pos'])
 
     def reset(self, is_training=True):
+        # 1. 重置整个物理世界 (清除所有残留状态)
         rospy.wait_for_service('/gazebo/reset_world')
-        try: self.reset_proxy()
-        except: pass
+        try:
+            self.reset_proxy()
+        except rospy.ServiceException as e:
+            print(f"Reset service failed: {e}")
         
+        # 2. 强制停止机器人 (清除之前的速度指令)
         self.pub_cmd.publish(Twist())
-        rospy.sleep(0.5)
+        rospy.sleep(0.5) # 等待物理引擎稳定
         
-        # 重置内部状态
+        # 3. [优化] 随机设置机器人初始位置 (仅在训练时)
+        if is_training:
+            # 在 (-7, 0) 附近随机
+            # x: [-7.5, -6.5], y: [-0.5, 0.5]
+            rand_x = -7.0 + np.random.uniform(-0.5, 0.5)
+            rand_y = 0.0 + np.random.uniform(-0.5, 0.5)
+            # yaw: 随机偏转 +/- 0.5 弧度 (约 30 度)
+            rand_yaw = np.random.uniform(-0.5, 0.5)
+            
+            self._set_model_state(rand_x, rand_y, rand_yaw)
+        else:
+            # 评估模式：固定在标准起点，保证公平对比
+            self._set_model_state(-7.0, 0.0, 0.0)
+
+        # 4. 重置内部逻辑状态
         self.c_t = np.zeros(self.num_tasks)
         self.f_t = np.full(self.num_tasks, -0.5)
         self.current_target_idx = 0
         
+        # 清空历史轨迹 buffer
         for h in self.histories:
             h.clear()
             for _ in range(h.maxlen): h.append(False)
         
+        # 5. 获取初始观测
         self.get_scan()
         
-        # [修改] 使用 GT 计算初始距离 (为了 Reward 的准确性)
+        # 使用 Ground Truth (pose_gt) 计算初始距离，确保 Reward 计算准确
+        # 注意：Training 时用 GT 计算 Reward，但 Obs 用 Odom
         curr_pos_gt = np.array(self.pose_gt[:2])
         self.last_dist = np.linalg.norm(curr_pos_gt - self.get_current_goal_pos())
         
         return self._get_obs()
+
+    # [新增] 辅助函数：设置 Gazebo 模型状态
+    def _set_model_state(self, x, y, yaw):
+        rospy.wait_for_service('/gazebo/set_model_state')
+        try:
+            set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+            state_msg = ModelState()
+            state_msg.model_name = 'limo'  # 确保这里名字和 launch 文件里 spawn 的名字一致
+            state_msg.pose.position.x = x
+            state_msg.pose.position.y = y
+            state_msg.pose.position.z = 0.1 # 稍微抬高一点防止卡进地里
+            
+            q = quaternion_from_euler(0, 0, yaw)
+            state_msg.pose.orientation.x = q[0]
+            state_msg.pose.orientation.y = q[1]
+            state_msg.pose.orientation.z = q[2]
+            state_msg.pose.orientation.w = q[3]
+            
+            set_state(state_msg)
+        except rospy.ServiceException as e:
+            print(f"Set model state failed: {e}")
 
     def step(self, action):
         total_r_stl = 0.0
@@ -228,8 +272,15 @@ class STL_Gazebo_Env:
         if np.min(self.scan_data) < 0.25:
             r_collision = -params.W_COLL
             done = True
-            
-        return (r_stage + r_progress), (r_collision + r_efficiency), done, succ
+        
+        # [优化] 计算速度奖励 (Velocity Reward)
+        # 只有当前进速度 v > 0 时才有正向奖励
+        v_current = self.robot_vel[0]
+        r_move = params.W_MOVE * v_current
+        
+        # 将 r_move 加入到 Aux Reward (第二项) 中
+        # 这样 Actor 为了最大化总分，会倾向于输出更大的 v
+        return (r_stage + r_progress), (r_collision + r_efficiency + r_move), done, succ
 
     def _calculate_f_score(self, history, task_type):
         # ... (保持原来的逻辑不变) ...

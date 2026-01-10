@@ -6,8 +6,10 @@ source devel/setup.bash
 
 killall -9 rosout roslaunch rosmaster gzserver nodelet robot_state_publisher gzclient python python3
 cd ~/STL-Projects/limo_RL/limo_RL-main
+rm -rf build/ devel/
 catkin_make
 source devel/setup.bash
+
 
 # 终端 1
 cd ~/STL-Projects/limo_RL/limo_RL-main
@@ -20,7 +22,7 @@ cd ~/STL-Projects/limo_RL/limo_RL-main
 source devel/setup.bash
 cd ~/STL-Projects/limo_RL/limo_RL-main/src/limoRL/scripts/STL-TD3/
 python3 main.py
-
+python3 main.py --load_model td3_15000
 
 cd ~/STL-Projects/limo_RL/limo_RL-main/src/limoRL/scripts/STL-TD3
 rm -rf logs/*

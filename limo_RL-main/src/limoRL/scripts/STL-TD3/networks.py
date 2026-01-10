@@ -24,6 +24,13 @@ class Actor(nn.Module):
         nn.init.xavier_uniform_(self.l2.weight)
         nn.init.uniform_(self.l3.weight, -3e-3, 3e-3)
         nn.init.uniform_(self.l3.bias, -3e-3, 3e-3)
+        
+        # [优化] 手动设置输出层的 Bias
+        # self.l3 的输出维度是 2 (v, w)
+        # 我们希望第 0 维 (v) 初始偏向正值，例如 0.5
+        # Sigmoid(0.5) ≈ 0.62，对应速度 ≈ 0.62 * 0.8 = 0.5 m/s (有初速度)
+        with torch.no_grad():
+             self.l3.bias[0].fill_(0.5)
 
     def forward(self, state):
         a = F.relu(self.l1(state))

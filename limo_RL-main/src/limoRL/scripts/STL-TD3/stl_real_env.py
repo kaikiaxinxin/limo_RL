@@ -66,9 +66,7 @@ class STL_Real_Env:
     def step(self, action):
         # 1. 动作执行
         vel = Twist()
-        # 实车安全限速 (0.4 m/s 比较稳妥，训练时是 0.8)
-        # 注意：这里仅仅是物理限速，不改变输入网络的 action 值
-        real_v = np.clip(action[0], 0, 0.4) 
+        real_v = np.clip(action[0], 0, 0.8) 
         real_w = np.clip(action[1], -params.MAX_W, params.MAX_W)
         
         vel.linear.x = real_v
