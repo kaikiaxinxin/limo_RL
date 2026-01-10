@@ -32,7 +32,7 @@ STATE_DIM = LIDAR_DIM + ROBOT_STATE_DIM + FLAG_DIM
 
 # === 动作空间 ===
 # 分别定义线速度和角速度限制
-MAX_V = 0.8  # m/s
+MAX_V = 0.5  # m/s
 MAX_W = 1.5  # rad/s (适当增大转弯能力)
 ACTION_DIM = 2
 # === 训练超参数 ===

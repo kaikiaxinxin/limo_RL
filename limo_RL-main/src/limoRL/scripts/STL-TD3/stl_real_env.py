@@ -1,122 +1,156 @@
 import rospy
 import numpy as np
 import math
-from geometry_msgs.msg import Twist
+import params
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-import params # 完美调用 params.py
+from geometry_msgs.msg import Twist
+from collections import deque
+from tf.transformations import euler_from_quaternion
 
 class STL_Real_Env:
     def __init__(self):
-        # 话题配置 (保持 DDPG 的成功经验)
-        self.pub_cmd = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
+        # 1. 订阅与发布
+        self.pub_cmd = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
+        self.sub_scan = rospy.Subscriber('/scan', LaserScan, self._scan_cb) # 实车通常直接叫 /scan
         self.sub_odom = rospy.Subscriber('/odom', Odometry, self._odom_cb)
         
-        # 状态初始化
-        self.scan_data = np.zeros(params.LIDAR_DIM)
-        self.pose_odom = [0.0, 0.0, 0.0] 
-        self.robot_vel = [0.0, 0.0]
+        # 2. 状态变量
+        self.pose_odom = [0.0, 0.0, 0.0] # [x, y, yaw]
+        self.robot_vel = [0.0, 0.0]      # [v, w]
+        self.scan_data = np.ones(params.LIDAR_DIM) * 5.0
         
-        # 任务标志位初始化 (完美适配 F-MDP-S)
+        self.has_odom = False
+        self.latest_scan_msg = None
+        
+        # 3. STL 逻辑状态
         self.num_tasks = params.NUM_TASKS
         self.c_t = np.zeros(self.num_tasks)
-        self.f_t = np.full(self.num_tasks, -0.5) # 保持与 stl_env.py 一致的默认值
+        self.f_t = np.full(self.num_tasks, -0.5)
+        
+        # 历史窗口
+        self.histories = []
+        for task in params.TASK_CONFIG:
+            win_len = int(task['time'] / params.DT)
+            self.histories.append(deque(maxlen=win_len))
+            
         self.current_target_idx = 0
         
-        print("Waiting for Limo connection...")
-        try:
-            # 兼容性检查：确保雷达和里程计都有数据
-            rospy.wait_for_message('/limo/scan', LaserScan, timeout=5)
-            rospy.wait_for_message('/odom', Odometry, timeout=5)
-            print("✅ Connected to Limo!")
-        except:
-            print("❌ Connection failed! Check 'roslaunch limo_bringup limo_start.launch'")
-            raise
+        # 等待硬件就绪
+        print("Waiting for Real Limo sensors...")
+        while not self.has_odom or self.latest_scan_msg is None:
+            rospy.sleep(0.1)
+        print("✅ Sensors Ready.")
+
+    def _scan_cb(self, msg):
+        self.latest_scan_msg = msg
 
     def _odom_cb(self, msg):
         p = msg.pose.pose.position
         q = msg.pose.pose.orientation
-        siny = 2.0 * (q.w * q.z + q.x * q.y)
-        cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(siny, cosy)
-        self.pose_odom = [p.x, p.y, yaw]
-        # 获取实车速度用于状态输入
-        self.robot_vel = [msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-
-    def _process_scan(self, msg):
-        raw = np.array(msg.ranges)
-        # [关键修正] 保持与 stl_env.py 一致的数据清洗逻辑
-        # 仿真中 inf 被设为 7.0，归一化分母是 5.0。
-        # 这里我们把 > 5.0 的都截断为 5.0，保证输入网络的数据在 [0, 1] 范围内
-        raw[np.isinf(raw)] = 5.0
-        raw[np.isnan(raw)] = 5.0
-        raw[raw > 5.0] = 5.0
         
-        # 降维
-        chunk = len(raw) // params.LIDAR_DIM
-        scan = []
-        for i in range(params.LIDAR_DIM):
-            scan.append(np.min(raw[i*chunk : (i+1)*chunk]))
-        self.scan_data = np.array(scan)
+        orientation_list = [q.x, q.y, q.z, q.w]
+        (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
+        
+        self.pose_odom = [p.x, p.y, yaw]
+        self.robot_vel = [msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.has_odom = True
 
     def get_current_goal_pos(self):
         idx = min(self.current_target_idx, self.num_tasks - 1)
         return np.array(params.TASK_CONFIG[idx]['pos'])
 
     def step(self, action):
-        # 1. 动作执行
+        # 1. 发送动作
         vel = Twist()
-        real_v = np.clip(action[0], 0, 0.8) 
-        real_w = np.clip(action[1], -params.MAX_W, params.MAX_W)
-        
-        vel.linear.x = real_v
-        vel.angular.z = real_w
+        vel.linear.x = action[0]
+        vel.angular.z = action[1]
         self.pub_cmd.publish(vel)
         
-        # 2. 同步观测 (Block until new scan)
-        try:
-            scan_msg = rospy.wait_for_message('/limo/scan', LaserScan, timeout=0.5)
-            self._process_scan(scan_msg)
-        except:
-            pass # 超时则沿用上一帧，防止卡死
+        # 2. STL 逻辑更新 (在实车上只做判定，不训练)
+        # 获取“世界坐标” (注意：deploy_limo.py 会在外部修改 self.pose_odom 加上 offset)
+        curr_pos = np.array(self.pose_odom[:2]) 
+        
+        for k in range(self.num_tasks):
+            task = params.TASK_CONFIG[k]
+            target_pos = np.array(task['pos'])
+            radius = task['radius']
             
-        # 3. 逻辑更新
-        self._check_task_status()
-        
-        return self._get_obs()
+            dist = np.linalg.norm(curr_pos - target_pos)
+            rho = radius - dist
+            is_satisfied = (rho >= 0)
+            
+            self.histories[k].append(is_satisfied)
+            self.f_t[k] = self._calculate_f_score(self.histories[k], task['type'])
+            
+            # 状态机跳转
+            if self.c_t[k] == 0:
+                prev_done = (k == 0) or (self.c_t[k-1] == 1)
+                if prev_done and is_satisfied:
+                    self.c_t[k] = 1.0
+                    print(f"🎉 Task {k} Reached! Moving to next.")
+                    if k < self.num_tasks - 1:
+                        self.current_target_idx = k + 1
+                    else:
+                        print("🏆 ALL TASKS COMPLETED.")
 
-    def _check_task_status(self):
-        # 简化的任务完成判定，仅用于切换目标
-        curr = np.array(self.pose_odom[:2])
-        goal = self.get_current_goal_pos()
-        dist = np.linalg.norm(curr - goal)
-        
-        if dist < params.TASK_CONFIG[self.current_target_idx]['radius']:
-            print(f"🌟 Task {self.current_target_idx} Reached!")
-            if self.current_target_idx < self.num_tasks - 1:
-                self.current_target_idx += 1
-                self.c_t[self.current_target_idx - 1] = 1.0 # 更新状态向量里的 c_t
+    def _calculate_f_score(self, history, task_type):
+        hist_list = list(history)
+        window_size = len(hist_list)
+        if task_type == 'F':
+            best_l = -1
+            for l in range(window_size):
+                if hist_list[l]: best_l = l
+            if best_l == -1: return -0.5
+            return ((best_l + 1) / window_size) - 0.5
+        return -0.5
 
     def _get_obs(self):
-        # [关键修正] 归一化系数必须是 5.0，与 stl_env.py 保持一致！
+        # === [核心修复] 雷达数据处理 ===
+        if self.latest_scan_msg:
+            raw = np.array(self.latest_scan_msg.ranges)
+            
+            # 1. 数据清洗
+            raw[np.isinf(raw)] = 6.0
+            raw[np.isnan(raw)] = 6.0
+            
+            # 2. [关键] 强制截断到 5.0m (Sim-to-Real Range Match)
+            # 即使硬件能测到 6.0m，我们也只给网络看 5.0m
+            raw = np.clip(raw, 0.0, 5.0)
+            
+            # 3. 降采样
+            # 实车雷达已经是 180度 FOV (-90~90)，所以直接降采样即可
+            chunk = len(raw) // params.LIDAR_DIM
+            scan_list = []
+            for i in range(params.LIDAR_DIM):
+                seg = raw[i*chunk : (i+1)*chunk]
+                if len(seg) > 0:
+                    scan_list.append(np.min(seg))
+                else:
+                    scan_list.append(5.0)
+            self.scan_data = np.array(scan_list)
+        
+        # 归一化 (匹配训练时的 /5.0)
         scan = np.clip(self.scan_data / 5.0, 0, 1)
         
+        # 机器人状态
         rx, ry, ryaw = self.pose_odom
         goal = self.get_current_goal_pos()
         
-        # 坐标变换 (Global -> Robot Frame)
         dx = goal[0] - rx
         dy = goal[1] - ry
+        
         lx = dx * math.cos(ryaw) + dy * math.sin(ryaw)
         ly = -dx * math.sin(ryaw) + dy * math.cos(ryaw)
         
-        # 拼装 Robot 状态 (6维)
-        robot = np.array([lx, ly, math.cos(ryaw), math.sin(ryaw), self.robot_vel[0], self.robot_vel[1]])
+        v = self.robot_vel[0]
+        w = self.robot_vel[1]
         
-        # 拼装 Flags (F-MDP-S 特有)
+        robot = np.array([lx, ly, math.cos(ryaw), math.sin(ryaw), v, w])
+        
         flags = np.concatenate((self.c_t, self.f_t))
         
         return np.concatenate((scan, robot, flags))
 
     def stop(self):
-        self.pub_cmd_vel.publish(Twist())
+        self.pub_cmd.publish(Twist())
