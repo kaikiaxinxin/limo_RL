@@ -1,2 +1,0 @@
-limoRL:limo_bringup:limo_description:limo_gazebo_sim
--DCATKIN_DEVEL_PREFIX=/home/zzg/STL-Projects/limo_RL/limo_RL-main/devel -DCMAKE_INSTALL_PREFIX=/home/zzg/STL-Projects/limo_RL/limo_RL-main/install -G Unix Makefiles
