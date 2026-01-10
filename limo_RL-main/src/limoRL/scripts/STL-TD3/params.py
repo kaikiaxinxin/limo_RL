@@ -37,17 +37,17 @@ MAX_W = 1.5  # rad/s (适当增大转弯能力)
 ACTION_DIM = 2
 # === 训练超参数 ===
 MAX_STEPS = 1000          
-TOTAL_STEPS = 400000      
-BATCH_SIZE = 2048         
+TOTAL_STEPS = 1000000      
+BATCH_SIZE = 256        
 GAMMA = 0.99
 TAU = 0.005
 LR_ACTOR = 3e-4
 LR_CRITIC = 3e-4
-START_STEPS = 5000        
+START_STEPS = 10000        
 POLICY_FREQ = 2
-EVAL_INTERVAL = 5000      
+EVAL_INTERVAL = 10000      
 EVAL_EPISODES = 5         
-UPDATE_ITERATION =2     
+UPDATE_ITERATION =1     
 ACTION_REPEAT = 3         
 
 # === 奖励权重 ===

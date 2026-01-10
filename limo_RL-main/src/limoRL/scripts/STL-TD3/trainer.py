@@ -101,28 +101,43 @@ class Trainer:
 
     def evaluate(self, step):
         print(f"--- Evaluating at step {step} ---")
+        
+        # === [关键修复 1] 必须在这里初始化统计变量 ===
         success_count = 0
         avg_reward = 0
-        avg_progress = 0 
+        avg_progress = 0  # <--- 之前报错就是因为缺了这一行！
         
         for _ in range(params.EVAL_EPISODES):
             state = self.env.reset(is_training=False)
             done = False
             ep_r = 0
-            while not done:
-                # 评估时通常不加噪声
+            
+            # === [关键修复 2] 初始化 succ 和计数器 ===
+            succ = False      # 防止循环未执行导致 succ 未定义
+            eval_step_count = 0 
+            
+            # [死循环保护] 增加步数限制
+            while not done and eval_step_count < params.MAX_STEPS:
+                eval_step_count += 1
+                
                 action = self.agent.select_action(state)
-                # 同样确保物理限制安全
+                # 动作裁剪
                 action[0] = np.clip(action[0], 0.0, params.MAX_V)
                 action[1] = np.clip(action[1], -params.MAX_W, params.MAX_W)
                 
                 state, r_tuple, done, succ = self.env.step(action)
                 ep_r += (r_tuple[0] + r_tuple[1])
-                if succ: success_count += 1
+                
+                if succ: 
+                    success_count += 1
+                    # 如果成功了，立即退出当前 Episode 循环（可选，加速评估）
+                    # done = True 
             
+            # 统计进度
             prog = self.env.current_target_idx
             if succ: prog = params.NUM_TASKS
-            avg_progress += prog
+            
+            avg_progress += prog  # <--- 这里就是报错的地方 line 124
             avg_reward += ep_r
             
         success_rate = success_count / params.EVAL_EPISODES
@@ -136,12 +151,11 @@ class Trainer:
             print(f"*** Best Model Found (Success: {success_rate}) ***")
             self.agent.save(os.path.join(params.MODEL_DIR, f"best_model_{step}"))
             
-        # [新增] 评估结束后也立即更新一次图表，查看最新评估点
+        # 绘图
         try:
             plot_training_curves(os.path.join(params.LOG_DIR, "training_log.csv"))
         except Exception as e:
             print(f"Warning: Evaluation plotting failed: {e}")
-
     def log_data(self, step, reward, success, max_task, mode):
         self.logs['step'].append(step)
         self.logs['reward'].append(reward)

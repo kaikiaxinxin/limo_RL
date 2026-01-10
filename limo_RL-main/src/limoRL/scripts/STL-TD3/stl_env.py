@@ -62,13 +62,16 @@ class STL_Gazebo_Env:
         self.latest_scan_msg = msg
 
     def _gt_cb(self, msg):
-        # 提取真值 (绝对精准)
         try:
-            # 假设模型名字叫 'limo'，如果是其他名字请修改
-            if "limo" in msg.name:
-                idx = msg.name.index("limo")
-                p = msg.pose[idx].position
-                q = msg.pose[idx].orientation
+            target_idx = -1
+            for i, name in enumerate(msg.name):
+                # 只要名字里包含 limo 就算找到 (适应 limo_ackerman, limo_diff 等)
+                if "limo" in name: 
+                    target_idx = i
+                    break
+            if target_idx != -1:
+                p = msg.pose[target_idx].position
+                q = msg.pose[target_idx].orientation
                 # 四元数转欧拉角
                 siny = 2.0 * (q.w * q.z + q.x * q.y)
                 cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)

@@ -90,12 +90,14 @@ class TD3_Dual_Critic(object):
 
         # --- Update Actor ---
         if self.total_it % params.POLICY_FREQ == 0:
-            new_action = self.actor(state)
+            raw_action = self.actor(state)
+
+            v_clamped = raw_action[:, 0].clamp(0, params.MAX_V)
+            w_clamped = raw_action[:, 1].clamp(-params.MAX_W, params.MAX_W)
             
-            # [新增] 必须对 Actor 生成的动作进行物理限制裁剪，使其符合 Critic 的认知分布
-            # 注意保持梯度传递，不要用 torch.no_grad()
-            new_action[:, 0] = new_action[:, 0].clamp(0, params.MAX_V)
-            new_action[:, 1] = new_action[:, 1].clamp(-params.MAX_W, params.MAX_W)
+            # 重新堆叠成 (Batch, 2)
+            new_action = torch.stack([v_clamped, w_clamped], dim=1)
+            
             # Actor 目标是最大化 (Q_STL + Q_Aux)
             q1_s, _ = self.critic_stl(state, new_action)
             q1_a, _ = self.critic_aux(state, new_action)
