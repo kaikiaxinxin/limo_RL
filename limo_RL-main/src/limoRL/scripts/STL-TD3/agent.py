@@ -3,8 +3,6 @@ import torch.nn.functional as F
 import numpy as np
 import copy
 import params
-
-# [修正] 这里导入 SingleCritic，而不是 Critic
 from networks import Actor, SingleCritic 
 
 class TD3_Dual_Critic(object):
@@ -38,22 +36,17 @@ class TD3_Dual_Critic(object):
     def select_action(self, state):
         # 状态转 Tensor
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
-        
-        # [新增] 必须加 no_grad，否则推理也会构建计算图，拖慢速度且浪费显存
         with torch.no_grad():
             action = self.actor(state).cpu().data.numpy().flatten()
         return action
     def update(self, buffer):
         self.total_it += 1
-        
         # 采样 (注意 buffer 返回 6 个值)
         state, action, next_state, r_stl, r_aux, not_done = buffer.sample(params.BATCH_SIZE)
 
         with torch.no_grad():
             # 目标动作平滑噪声
             noise = (torch.randn_like(action) * 0.2)
-            # 注意：这里的 clamp 需要稍微宽松一点，或者针对 v/w 分别处理
-            # 简单起见，这里先 clamp 到物理极限范围之外一点点也没关系，因为 Actor 输出会被截断
             noise[:, 0] = noise[:, 0].clamp(-0.2, 0.2) # v noise
             noise[:, 1] = noise[:, 1].clamp(-0.5, 0.5) # w noise
             

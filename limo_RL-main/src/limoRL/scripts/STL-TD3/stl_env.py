@@ -86,36 +86,32 @@ class STL_Gazebo_Env:
             msg = self.latest_scan_msg
             raw = np.array(msg.ranges)
             
-            # === [核心修复] FOV 对齐逻辑 ===
-            # 仿真雷达可能是 -120~120 (240度)，实车是 -90~90 (180度)
-            # 我们强制只取中间的 -90 ~ +90 度
-            min_angle = -np.pi / 2  # -90 deg
-            max_angle = np.pi / 2   # +90 deg
+            # === 1. FOV 裁剪 (-90 ~ +90) ===
+            min_angle = -np.pi / 2
+            max_angle = np.pi / 2
             
-            # 计算对应的索引范围
-            # 索引 = (目标角度 - 起始角度) / 增量
-            # 注意 msg.angle_min 可能是 -2.09 (仿真)
+            # 动态计算索引，适应不同雷达配置
             start_idx = int((min_angle - msg.angle_min) / msg.angle_increment)
             end_idx = int((max_angle - msg.angle_min) / msg.angle_increment)
             
-            # 边界保护
+            # 边界安全保护
             start_idx = max(0, start_idx)
             end_idx = min(len(raw), end_idx)
             
-            # 裁剪数据 (只保留中间 180 度)
             cropped_scan = raw[start_idx:end_idx]
             
-            # === 数据清洗 ===
+            # === 2. 数据清洗与截断 (Sim-to-Real 核心) ===
             cropped_scan[np.isinf(cropped_scan)] = 5.0
             cropped_scan[np.isnan(cropped_scan)] = 5.0
-            # 实车最大6.0，仿真最大8.0，统一截断为 5.0
             cropped_scan = np.clip(cropped_scan, 0.0, 5.0)
             
-            # === 降采样 ===
-            # 确保即使数据点变少了，依然映射到 LIDAR_DIM
-            if len(cropped_scan) == 0: return False # 异常保护
+            # === 3. 降采样 ===
+            # [优化] 增加数据量检查，防止 chunk=0 导致崩溃
+            n_points = len(cropped_scan)
+            if n_points < params.LIDAR_DIM: 
+                return False 
             
-            chunk = len(cropped_scan) // params.LIDAR_DIM
+            chunk = n_points // params.LIDAR_DIM
             scan = []
             for i in range(params.LIDAR_DIM):
                 segment = cropped_scan[i*chunk:(i+1)*chunk]
@@ -126,10 +122,10 @@ class STL_Gazebo_Env:
             
             self.scan_data = np.array(scan)
             return True
+            
         except Exception as e:
             print(f"Scan Error: {e}")
             return False
-
     def get_current_goal_pos(self):
         idx = min(self.current_target_idx, self.num_tasks - 1)
         return np.array(params.TASK_CONFIG[idx]['pos'])
@@ -143,12 +139,12 @@ class STL_Gazebo_Env:
         rospy.sleep(0.5)
         
         if is_training:
-            rand_x = -7.0 + np.random.uniform(-0.5, 0.5)
-            rand_y = 0.0 + np.random.uniform(-0.5, 0.5)
+            rand_x = params.INIT_POS[0] + np.random.uniform(-0.5, 0.5)
+            rand_y = params.INIT_POS[1] + np.random.uniform(-0.5, 0.5)
             rand_yaw = np.random.uniform(-0.5, 0.5)
             self._set_model_state(rand_x, rand_y, rand_yaw)
         else:
-            self._set_model_state(-7.0, 0.0, 0.0)
+            self._set_model_state(params.INIT_POS[0], params.INIT_POS[1], 0.0)
 
         self.c_t = np.zeros(self.num_tasks)
         self.f_t = np.full(self.num_tasks, -0.5)

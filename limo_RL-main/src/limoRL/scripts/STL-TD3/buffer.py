@@ -15,9 +15,6 @@ class ReplayBuffer:
         self.size = 0
         self.batch_size = batch_size
         self.device = params.DEVICE
-        
-        # === 预分配显存/内存 ===
-        # 直接存储在 DEVICE 上 (GPU)，避免训练时的 CPU-GPU 数据搬运开销
         # 如果显存不足 (OOM)，可以将 device 改为 'cpu'
         self.state = torch.empty((self.max_size, state_dim), device=self.device)
         self.action = torch.empty((self.max_size, action_dim), device=self.device)

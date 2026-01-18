@@ -71,9 +71,9 @@
       <static>1</static>
       <link name='init_area_link'>
         <visual name='init_area_visual'>
-          <pose>-20.0 9.0 0.001 0 -0 0</pose>
+          <pose>-21.0 1.0 0.001 0 -0 0</pose>
           <geometry>
-            <box><size>2.0 2.0 0.001</size></box>
+            <box><size>3.0 3.0 0.002</size></box>
           </geometry>
           <material>
             <script>
@@ -91,9 +91,9 @@
       <static>1</static>
       <link name='phi1_area_link'>
         <visual name='phi1_area_visual'>
-          <pose>-7.0 0.0 0.001 0 -0 0</pose>
+          <pose>-3.0 5.0 0.001 0 -0 0</pose>
           <geometry>
-            <box><size>2.0 2.0 0.001</size></box>
+            <box><size>3.0 3.0 0.002</size></box>
           </geometry>
           <material>
             <script>
@@ -106,14 +106,13 @@
         </visual>
       </link>
     </model>
-
     <model name='phi2_area'>
       <static>1</static>
       <link name='phi2_area_link'>
         <visual name='phi2_area_visual'>
-          <pose>-20.0 -9.0 0.001 0 -0 0</pose>
+          <pose>-8.0 -5.0 0.001 0 -0 0</pose>
           <geometry>
-            <box><size>2.0 2.0 0.001</size></box>
+            <box><size>3.0 3.0 0.002</size></box>
           </geometry>
           <material>
             <script>
@@ -325,51 +324,6 @@
           </meta>
         </visual>
         <pose>-14.4776 1.53103 0 0 -0 -1.5708</pose>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <link name='Wall_20'>
-        <collision name='Wall_20_Collision'>
-          <geometry>
-            <box>
-              <size>5 0.15 2.5</size>
-            </box>
-          </geometry>
-          <pose>0 0 1.25 0 -0 0</pose>
-          <max_contacts>10</max_contacts>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-        </collision>
-        <visual name='Wall_20_Visual'>
-          <pose>0 0 1.25 0 -0 0</pose>
-          <geometry>
-            <box>
-              <size>5 0.15 2.5</size>
-            </box>
-          </geometry>
-          <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
-          <meta>
-            <layer>0</layer>
-          </meta>
-        </visual>
-        <pose>-11.0543 1.57729 0 0 -0 -1.5708</pose>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>

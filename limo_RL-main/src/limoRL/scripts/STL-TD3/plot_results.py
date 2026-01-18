@@ -1,7 +1,4 @@
 import matplotlib
-# [关键修复] 必须在导入 pyplot 之前设置 'Agg' 后端
-# 'Agg' 表示 Anti-Grain Geometry，是专门用于生成图像文件的非交互式后端
-# 这行代码能完美解决 "main thread is not in main loop" 错误
 matplotlib.use('Agg')
 
 import pandas as pd

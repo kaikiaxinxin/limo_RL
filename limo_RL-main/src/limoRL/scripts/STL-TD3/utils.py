@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import random
 import os
-import matplotlib.pyplot as plt # [新增] 用于绘图
+import matplotlib.pyplot as plt 
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -32,7 +32,6 @@ def make_dirs(paths):
         if not os.path.exists(p):
             os.makedirs(p)
 
-# [新增] 借鉴附件的简单绘图功能
 def plot_learning_curve(scores, filename, window=50):
     N = len(scores)
     running_avg = np.empty(N)
@@ -48,4 +47,4 @@ def plot_learning_curve(scores, filename, window=50):
     plt.legend()
     plt.grid(True)
     plt.savefig(filename)
-    plt.close() # 关闭画布释放内存
+    plt.close()

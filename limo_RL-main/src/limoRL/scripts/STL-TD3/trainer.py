@@ -4,7 +4,6 @@ import os
 import params
 import time
 import torch
-
 # 导入绘图函数
 from plot_results import plot_training_curves 
 
@@ -20,7 +19,7 @@ class Trainer:
         # 用于控制绘图频率的计数器
         self.episode_count = 0 
 
-    # [修改] 增加 start_step 参数，默认为 0
+    # 增加 start_step 参数，默认为 0
     def train(self, start_step=0):
         print(f"=== Start Training (Generic Tasks: {params.NUM_TASKS} stages) ===")
         print(f"⏩ Resuming from step {start_step}...")
@@ -29,12 +28,12 @@ class Trainer:
         ep_reward = 0
         ep_steps = 0
         
-        # [修改] 循环从 start_step 开始
+        #循环从 start_step 开始
         for t in range(start_step, int(params.TOTAL_STEPS)):
             ep_steps += 1
             
             # 1. Select Action (适配物理限制)
-            # [关键] 只有当前步数确实小于随机探索阶段时，才使用随机动作
+            #只有当前步数确实小于随机探索阶段时，才使用随机动作
             # 如果是断点续训 (比如 t=15000)，这里条件为 False，直接进入网络决策
             if t < params.START_STEPS:
                 # 随机探索阶段：分别采样 v 和 w
@@ -47,7 +46,7 @@ class Trainer:
                 noise = self.noise.sample()
                 action = raw_action + noise
                 
-                # [优化] 动态最小速度限制 (Linear Decay)
+                #动态最小速度限制 (Linear Decay)
                 # 设定 20000 步的缓冲期，让 min_v 从 0.2 慢慢降到 0.0
                 decay_steps = 20000.0
                 steps_past = t - params.START_STEPS
@@ -115,8 +114,6 @@ class Trainer:
 
     def evaluate(self, step):
         print(f"--- Evaluating at step {step} ---")
-        
-        # [修复] 初始化统计变量
         success_count = 0
         avg_reward = 0
         avg_progress = 0
@@ -126,7 +123,7 @@ class Trainer:
             done = False
             ep_r = 0
             
-            # [修复] 初始化 succ 和计数器
+            # 初始化 succ 和计数器
             succ = False      
             eval_step_count = 0 
             
@@ -177,7 +174,4 @@ class Trainer:
         # 如果文件不存在则写入 header，否则追加模式 (防止覆盖)
         log_path = os.path.join(params.LOG_DIR, "training_log.csv")
         df = pd.DataFrame(self.logs)
-        
-        # 为了简单起见，这里还是使用全量重写模式 (因为 self.logs 一直在内存里累加)
-        # 如果训练非常久，内存占用大，可以改为 append 模式并清空 self.logs
         df.to_csv(log_path, index=False)

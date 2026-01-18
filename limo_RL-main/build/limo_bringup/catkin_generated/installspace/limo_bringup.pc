@@ -1,8 +1,0 @@
-prefix=/home/zzg/STL-Projects/limo_RL/limo_RL-main/install
-
-Name: limo_bringup
-Description: Description of limo_bringup
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

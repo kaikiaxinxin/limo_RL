@@ -1,340 +1,219 @@
-```markdown
-# 🚗 Limo 机器人 TD3-STL 算法实物部署指南
+# 🚗 Limo 机器人 TD3-STL 算法实物部署操作指南
 
-本文档详细说明了如何将训练好的 **TD3-STL 强化学习导航模型** 部署到 **松灵 Limo 实车** 上。内容涵盖硬件环境配置、核心代码实现、坐标采集方法、实验操作步骤及常见故障排查。
+本文档详细说明了如何将训练好的 **TD3-STL 强化学习导航模型** 部署到 **松灵 Limo 实车** 上。
+
+⚠️ **核心提示**：实车部署不仅仅是运行代码，最关键的是 **“坐标系对齐”** 和 **“传感器一致性”**。请务必严格按照以下步骤操作。
 
 ---
 
-## 📋 1. 硬件与网络准备
+## 📋 第一阶段：环境与代码核对 (Checklist)
 
-### 1.1 设备清单
-* **主机 (PC)**: 运行深度强化学习模型 (TD3-STL)，充当 ROS Master。
-* **从机 (Limo)**: 运行底层驱动 (底盘 + 雷达)，接收控制指令。
-* **网络环境**: 两者需连接同一局域网 (建议使用手机 5G 热点或独立路由器，避免校园网/公司内网的防火墙干扰)。
+在开始搬运小车之前，请确保您的代码库已经完成了 **Sim-to-Real 的对齐修正**。
 
-### 1.2 网络配置 (关键步骤)
-假设 IP 分配如下（请根据实际终端输入 `ifconfig` 的结果修改）：
-* **PC IP**: `172.20.10.5`
-* **Limo IP**: `172.20.10.6`
+### 1.1 仿真模型对齐
 
-#### PC 端配置
-在 PC 终端执行 (或写入 `~/.bashrc`):
+* **文件**: `src/limo_description/urdf/limo_gazebo.gazebo`
+* **检查项**:
+* [ ] `samples` 是否已改为 **720**？
+* [ ] `max angle` 是否为 **1.57** (90度，总FOV 180度)？
+* [ ] `range max` 是否为 **6.0**？
+
+
+* **操作**: 修改后必须重新编译工作空间：
 ```bash
-export ROS_MASTER_URI=[http://172.20.10.5:11311](http://172.20.10.5:11311)
-export ROS_IP=172.20.10.5
+catkin_make
+source devel/setup.bash
 
 ```
 
-#### Limo 端配置
 
-SSH 登录 Limo 后执行:
 
-```bash
-export ROS_MASTER_URI=[http://172.20.10.5:11311](http://172.20.10.5:11311)
-export ROS_IP=172.20.10.6
+### 1.2 训练参数对齐
 
-```
+* **文件**: `src/limoRL/scripts/STL-TD3/params.py`
+* **检查项**:
+* [ ] `MAX_V` 是否已降至 **0.5** (实车安全速度)？
+* [ ] `ACTION_REPEAT` 是否设为 **2** (对应 5Hz 控制频率)？
 
-#### 验证连接
 
-1. **PC 端**: 启动 `roscore`。
-2. **Limo 端**: 运行 `rostopic list`。如果能看到话题列表，说明通信成功。
+
+### 1.3 部署脚本确认
+
+* **文件**: `deploy_limo.py`
+* **检查项**: 是否移除了 `env.pose_odom += offset` 这种错误的累加代码？（应由 Env 类内部处理或只在读取时处理）。
 
 ---
 
-## 🛠️ 2. 核心程序文件
+## 📍 第二阶段：物理场地坐标标定 (Calibration)
 
-请在 PC 端的工作空间 `src/limoRL/scripts/STL-TD3/` 目录下创建或更新以下 3 个脚本。
+**这是最关键的一步。** 仿真里的任务点（例如 `(6, -6)`）在现实世界中可能在墙壁里。我们必须测量现实场景的坐标，并反算回代码中。
 
-### 2.1 配置文件 `params.py`
+### 2.1 确定“物理原点”
 
-**用途**: 定义实物场景中的任务点坐标。需根据第 3 节“场地坐标采集”的结果进行修改。
+1. 在办公室/实验室地面贴一个胶带十字，作为 **实车启动点 (Real Origin, 0,0)**。
+2. 规定 **车头朝向**（例如正对走廊前方）。此方向即为 **X轴正方向**。
+3. **注意**：每次实验，小车必须严格摆放在此位置、此朝向开机。
 
-```python
-# 修改 TASK_CONFIG 部分，替换为你实际测量的坐标
-TASK_CONFIG = [
-    # 任务 0: 例如门口 (x, y)，半径建议放大到 0.5m 以适应里程计漂移
-    {'type': 'F', 'pos': [2.5, -1.2], 'radius': 0.5, 'time': 20.0}, 
-    
-    # 任务 1: 例如走廊尽头
-    {'type': 'F', 'pos': [5.0, 0.5],  'radius': 0.5, 'time': 20.0},
-]
+### 2.2 采集现实任务坐标
 
-# 其他参数保持不变
-# LIDAR_DIM = 20
-# STATE_DIM = ...
-
-```
-
-### 2.2 实车环境接口 `stl_real_env_pro.py`
-
-**用途**: 负责处理 `/limo/scan` 雷达数据和 `/odom` 里程计，并进行 Sim-to-Real 的对齐（归一化、降采样）。
-
-```python
-import rospy
-import numpy as np
-import math
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
-import params 
-
-class STL_Real_Env:
-    def __init__(self):
-        # 话题配置
-        self.pub_cmd = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
-        self.sub_odom = rospy.Subscriber('/odom', Odometry, self._odom_cb)
-        
-        # 状态初始化
-        self.scan_data = np.zeros(params.LIDAR_DIM)
-        self.pose_odom = [0.0, 0.0, 0.0] 
-        self.robot_vel = [0.0, 0.0]
-        
-        # 任务标志位
-        self.num_tasks = params.NUM_TASKS
-        self.c_t = np.zeros(self.num_tasks)
-        self.f_t = np.full(self.num_tasks, -0.5)
-        self.current_target_idx = 0
-        
-        print("Waiting for Limo connection...")
-        try:
-            # 兼容性检查：确保雷达和里程计都有数据
-            rospy.wait_for_message('/limo/scan', LaserScan, timeout=5)
-            rospy.wait_for_message('/odom', Odometry, timeout=5)
-            print("✅ Connected to Limo!")
-        except:
-            print("❌ Connection failed! Check 'roslaunch limo_bringup limo_start.launch'")
-            raise
-
-    def _odom_cb(self, msg):
-        p = msg.pose.pose.position
-        q = msg.pose.pose.orientation
-        siny = 2.0 * (q.w * q.z + q.x * q.y)
-        cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(siny, cosy)
-        self.pose_odom = [p.x, p.y, yaw]
-        self.robot_vel = [msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-
-    def _process_scan(self, msg):
-        raw = np.array(msg.ranges)
-        # 数据清洗：将 inf 和 >5.0 的值截断为 5.0 (与训练归一化系数保持一致)
-        raw[np.isinf(raw)] = 5.0
-        raw[np.isnan(raw)] = 5.0
-        raw[raw > 5.0] = 5.0
-        
-        # 降维 (例如 720 -> 20)
-        chunk = len(raw) // params.LIDAR_DIM
-        scan = []
-        for i in range(params.LIDAR_DIM):
-            scan.append(np.min(raw[i*chunk : (i+1)*chunk]))
-        self.scan_data = np.array(scan)
-
-    def get_current_goal_pos(self):
-        idx = min(self.current_target_idx, self.num_tasks - 1)
-        return np.array(params.TASK_CONFIG[idx]['pos'])
-
-    def step(self, action):
-        # 1. 动作执行 (安全限速 0.4 m/s)
-        vel = Twist()
-        real_v = np.clip(action[0], 0, 0.4) 
-        real_w = np.clip(action[1], -params.MAX_W, params.MAX_W)
-        vel.linear.x = real_v
-        vel.angular.z = real_w
-        self.pub_cmd.publish(vel)
-        
-        # 2. 同步观测 (阻塞等待新一帧雷达，确保决策实时性)
-        try:
-            scan_msg = rospy.wait_for_message('/limo/scan', LaserScan, timeout=0.5)
-            self._process_scan(scan_msg)
-        except:
-            pass 
-            
-        # 3. 逻辑更新
-        self._check_task_status()
-        return self._get_obs()
-
-    def _check_task_status(self):
-        curr = np.array(self.pose_odom[:2])
-        goal = self.get_current_goal_pos()
-        dist = np.linalg.norm(curr - goal)
-        if dist < params.TASK_CONFIG[self.current_target_idx]['radius']:
-            print(f"🌟 Task {self.current_target_idx} Reached!")
-            if self.current_target_idx < self.num_tasks - 1:
-                self.current_target_idx += 1
-                self.c_t[self.current_target_idx - 1] = 1.0 
-
-    def _get_obs(self):
-        # 归一化系数与训练保持一致 (5.0)
-        scan = np.clip(self.scan_data / 5.0, 0, 1)
-        rx, ry, ryaw = self.pose_odom
-        goal = self.get_current_goal_pos()
-        dx = goal[0] - rx
-        dy = goal[1] - ry
-        lx = dx * math.cos(ryaw) + dy * math.sin(ryaw)
-        ly = -dx * math.sin(ryaw) + dy * math.cos(ryaw)
-        robot = np.array([lx, ly, math.cos(ryaw), math.sin(ryaw), self.robot_vel[0], self.robot_vel[1]])
-        flags = np.concatenate((self.c_t, self.f_t))
-        return np.concatenate((scan, robot, flags))
-
-    def stop(self):
-        self.pub_cmd_vel.publish(Twist())
-
-```
-
-### 2.3 部署主程序 `deploy_limo_pro.py`
-
-**用途**: 加载 PyTorch 模型并进行推理循环。
-
-```python
-import rospy
-import torch
-import numpy as np
-import os
-import params
-from agent import TD3_Dual_Critic
-from stl_real_env_pro import STL_Real_Env
-
-def main():
-    rospy.init_node('stl_td3_deploy')
-    
-    # 1. 环境初始化
-    try:
-        env = STL_Real_Env()
-    except Exception as e:
-        print(f"Env Error: {e}")
-        return
-
-    # 2. 加载模型
-    agent = TD3_Dual_Critic()
-    # 修改为你的最佳模型名 (不带 _actor 后缀)
-    model_name = "best_model_5000" 
-    model_path = os.path.join(params.MODEL_DIR, model_name)
-    
-    print(f"Loading model: {model_path}...")
-    if not os.path.exists(model_path + "_actor"):
-        print(f"❌ Model file not found: {model_path}_actor")
-        return
-        
-    agent.load(model_path)
-    print("✅ Model loaded.")
-
-    # 3. 主循环
-    rate = rospy.Rate(10) # 10Hz
-    print("🚀 Starting Autonomous Navigation...")
-    
-    try:
-        while not rospy.is_shutdown():
-            state = env._get_obs()
-            action = agent.select_action(state)
-            env.step(action)
-            
-            dist = np.linalg.norm(np.array(env.pose_odom[:2]) - env.get_current_goal_pos())
-            print(f"Task: {env.current_target_idx} | Dist: {dist:.2f}m | Act: [{action[0]:.2f}, {action[1]:.2f}]")
-            rate.sleep()
-            
-    except KeyboardInterrupt:
-        print("Stopping...")
-    finally:
-        env.stop()
-
-if __name__ == '__main__':
-    main()
-
-```
-
----
-
-## 📍 3. 场地坐标采集 (Calibration)
-
-实车导航基于**里程计 (Odom)**，坐标原点 `(0,0)` 是**小车上电启动底盘驱动的位置**。因此，必须先手动采集目标点相对于起点的坐标。
-
-**操作步骤：**
-
-1. **定义原点**：用胶带在地上标记一个“出发点”，并规定车头朝向（X轴正方向）。
-2. **启动 Limo**：将车摆好，SSH 运行:
+1. **启动 Limo 底盘** (在 Limo 端):
 ```bash
 roslaunch limo_bringup limo_start.launch pub_odom_tf:=false
 
 ```
 
 
-3. **启动遥控**：PC 端运行:
+2. **启动键盘控制** (在 PC 端):
 ```bash
 roslaunch limo_bringup limo_teletop_keyboard.launch
 
 ```
 
 
-4. **采集坐标**：
-* 遥控小车开到任务 A 点。
-* PC 终端查看坐标：`rostopic echo /odom/pose/pose/position -n 1`
-* 记录 x, y 值。
-* 继续开到任务 B 点，记录 x, y 值。
+3. **测量任务点 A (例如门口)**:
+* 遥控小车开到门口中心。
+* 查看里程计坐标:
+```bash
+rostopic echo /odom/pose/pose/position -n 1
+
+```
 
 
-5. **更新配置**：将记录的值填入 `params.py` 的 `TASK_CONFIG` 中。
+* 记下输出的 `x` 和 `y` (例如 `x=3.5, y=-1.2`)。
+
+
+4. **测量任务点 B (例如打印机旁)**:
+* 遥控开过去，记下坐标 (例如 `x=6.0, y=2.0`)。
+
+
+
+### 2.3 反算并更新配置
+
+我们需要将“现实坐标”转换为模型认为的“仿真坐标”。
+
+* **公式**: `Sim_Coord = Real_Coord + Offset`
+* **默认 Offset**: `(-7.0, 0.0)` (因为仿真里车出生在 -7.0)
+
+**计算示例**:
+
+* **任务 A (门口)**:
+* Real: `(3.5, -1.2)`
+* Sim: `3.5 + (-7.0) = -3.5`, `-1.2 + 0 = -1.2`
+* **填入 `params.py**`: `pos: [-3.5, -1.2]`
+
+
+* **任务 B (打印机)**:
+* Real: `(6.0, 2.0)`
+* Sim: `6.0 + (-7.0) = -1.0`, `2.0 + 0 = 2.0`
+* **填入 `params.py**`: `pos: [-1.0, 2.0]`
+
+
+
+**操作**: 修改 `src/limoRL/scripts/STL-TD3/params.py` 中的 `TASK_CONFIG`，填入计算后的坐标。
 
 ---
 
-## 🚀 4. 实验操作流程
+## 🚀 第三阶段：实车实验操作流程
 
-### 步骤 1: 物理就位
+### 3.1 网络配置
 
-* 将 Limo 搬回胶带标记的 **原点 (0,0)**。
-* 确保车头朝向正确（与采集坐标时一致）。
+确保 PC 和 Limo 连接同一 WiFi。
 
-### 步骤 2: 启动底层 (Limo 端)
+* **Limo 端 (`~/.bashrc`)**:
+```bash
+export ROS_MASTER_URI=http://<PC_IP>:11311
+export ROS_IP=<LIMO_IP>
 
-* 如果之前运行过，**必须重启** `limo_start.launch` 以清零里程计。
+```
+
+
+* **PC 端 (`~/.bashrc`)**:
+```bash
+export ROS_MASTER_URI=http://<PC_IP>:11311
+export ROS_IP=<PC_IP>
+
+```
+
+
+* **测试**: 在两端互相 `ping` 对方 IP。
+
+### 3.2 启动步骤
+
+1. **PC 端**: 启动 ROS Master
+```bash
+roscore
+
+```
+
+
+2. **Limo 端**: 启动底层驱动
+* 将车摆放在 **物理原点**。
+* SSH 连接 Limo 并运行:
+
+
 ```bash
 roslaunch limo_bringup limo_start.launch pub_odom_tf:=false
 
 ```
 
 
+* *检查雷达是否旋转。*
 
-### 步骤 3: 启动导航 (PC 端)
 
-* 确保 `roscore` 已由 Limo 或 PC 启动。
+3. **PC 端**: 检查数据链路
 ```bash
-cd ~/your_ws/src/limoRL/scripts/STL-TD3
-python3 deploy_limo_pro.py
+rostopic list  # 应该能看到 /scan 和 /odom
+rostopic echo /scan -n 1 # 确认有数据且不为空
 
 ```
 
 
+4. **PC 端**: 运行部署脚本
+```bash
+cd ~/STL-Projects/limo_RL/limo_RL-main/src/limoRL/scripts/STL-TD3/
+python3 deploy_limo.py
 
-### 步骤 4: 观察与急停
+```
 
-* 观察终端打印的距离信息。
-* **急停**：若车失控，在运行 python 的终端狂按 `Ctrl+C`，程序会自动发送 0 速度。
+
+* 终端会显示: `Alignment Offset: [-7.0, 0.0]`
+* **再次确认**车头方向正确。
+* 按 **Enter** 键开始。
+
+
+
+### 3.3 实验监控
+
+* **观察终端**:
+* `Task`: 当前进行到第几个任务。
+* `Dist`: 距离当前目标的距离（如果距离在变小，说明导航正常）。
+* `Act`: 输出的线速度和角速度。
+
+
+* **紧急停止**:
+* 如果小车即将撞墙或失控，请立即在运行 Python 的终端按 **`Ctrl + C`**。脚本逻辑会发送 `(0,0)` 速度指令强制停车。
+
+
 
 ---
 
-## ❓ 5. 常见问题排查 (Troubleshooting)
+## ❓ 常见问题 (Troubleshooting)
 
-| 现象 | 可能原因 | 解决方案 |
-| --- | --- | --- |
-| **卡在 "Waiting for Limo..."** | 网络不通或话题名错误 | 1. 互 `ping` 对方 IP。<br>
+1. **小车原地转圈 / 倒车**
+* **原因**: 坐标系定义反了，或者电机驱动方向定义反了。
+* **解决**: 在 `stl_real_env.py` 的 `step` 函数中，尝试给 `action[1]` (角速度) 加负号测试。
 
-<br>2. 检查 `ROS_MASTER_URI`。<br>
 
-<br>3. `rostopic list` 确认是否有 `/limo/scan`。 |
-| **车原地打转/倒车** | 坐标系/电机方向反了 | 1. 检查 `stl_real_env_pro.py` 中是否需要给 `action[1]` 加负号。<br>
+2. **小车直冲墙壁**
+* **原因**: 这里的墙壁在“仿真坐标系”里可能是一片空地。
+* **解决**: 说明你的 **第 2.3 步 (坐标反算)** 没做对，或者物理摆放的朝向歪了。请重新标定。
 
-<br>2. 检查雷达是否装反 (RViz 查看)。 |
-| **雷达数据全是 5.0** | 雷达被遮挡/驱动TF问题 | 1. PC 运行 `rviz`，Fixed Frame 选 `odom`，Add LaserScan，看点云是否显示在车身内。 |
-| **未到终点就显示 Reached** | 里程计漂移过大 | 1. 缩短任务距离。<br>
 
-<br>2. 在 `params.py` 中适当增大 `radius` (如 0.6m)。<br>
+3. **雷达数据报错 / 无法避障**
+* **原因**: 实车雷达可能扫到了车体上的天线或外壳，导致它以为只有 1cm 距离。
+* **解决**: 打开 PC 端的 `rviz`，添加 `LaserScan`，查看是否有固定的噪点在车身周围。如果有，需要在代码中把这部分角度的数据 mask 掉 (设为 5.0)。
 
-<br>3. 检查地面摩擦力。 |
-| **报错 Model not found** | 模型路径/文件名不对 | 检查 `models` 文件夹，确认文件名是否为 `best_model_5000_actor`。修改脚本中的 `model_name`。 |
 
----
-
-*Generated for Limo Robot RL Deployment.*
-
-```
-
-```
+4. **报错 "Model not found"**
+* **原因**: `models` 文件夹里没有你指定的模型。
+* **解决**: 检查 `deploy_limo.py` 里的 `model_name` 是否与文件夹里的文件名一致（注意不要带 `_actor` 后缀）。

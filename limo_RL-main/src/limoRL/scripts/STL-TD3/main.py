@@ -80,14 +80,8 @@ def main():
         try:
             agent.load(model_path)
             print("✅ Model loaded successfully!")
-            
-            # [新增] 智能解析步数
             try:
-                # 尝试从文件名 "td3_15000" 中提取 "15000"
-                # 如果是 "best_model_5000"，也能提取出 "5000"
                 if "best_model" in args.load_model:
-                     # 最佳模型通常用于评估或微调，我们假设它已经过了随机阶段
-                     # 这里给一个大于 START_STEPS 的值，或者解析后缀
                      parsed_step = int(args.load_model.split('_')[-1])
                      start_step = max(parsed_step, params.START_STEPS + 1)
                 else:
@@ -121,7 +115,6 @@ def main():
     trainer = Trainer(env, agent, buffer, noise)
     
     try:
-        # [修改] 将 start_step 传入 train 函数
         trainer.train(start_step=start_step)
     except KeyboardInterrupt:
         print("\n🛑 Training interrupted by user.")
